@@ -4,11 +4,14 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
@@ -57,6 +60,9 @@ type Model struct {
 	sidebarVisible bool
 	showHelp       bool
 
+	sending    bool
+	cancelSend context.CancelFunc
+
 	collections panels.Collections
 	request     panels.Request
 	response    panels.Response
@@ -74,8 +80,8 @@ func New(cfg Config) Model {
 		lastMain:       paneRequest,
 		sidebarVisible: true,
 		collections:    panels.NewCollections(t, keys),
-		request:        panels.NewRequest(t),
-		response:       panels.NewResponse(t),
+		request:        panels.NewRequest(t, keys),
+		response:       panels.NewResponse(t, keys),
 	}
 	m.applyFocus()
 	return m
@@ -103,10 +109,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.request.SetRequest(msg.Request)
 		return m, nil
 
+	case responseReceivedMsg:
+		m.sending = false
+		m.cancelSend = nil
+		m.response.SetResponse(msg.resp, msg.err)
+		return m, nil
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.response, cmd = m.response.Update(msg)
+		return m, cmd
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
+}
+
+// startSend snapshots the current request and fires it off, storing the
+// cancel func so esc can abort the send.
+func (m Model) startSend() (tea.Model, tea.Cmd) {
+	req := m.request.CurrentRequest()
+	if req == nil || m.sending {
+		return m, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.sending = true
+	m.cancelSend = cancel
+	return m, tea.Batch(m.response.StartSending(), sendRequestCmd(ctx, req.Clone()))
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -120,9 +150,27 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Insert mode captures everything except ctrl+c, so typed text never
+	// triggers global shortcuts.
+	if m.focus == paneRequest && m.request.Editing() {
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		return m.routeToFocused(msg)
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.Send):
+		return m.startSend()
+
+	case key.Matches(msg, m.keys.Escape):
+		if m.sending && m.cancelSend != nil {
+			m.cancelSend()
+		}
+		return m, nil
 
 	case key.Matches(msg, m.keys.Help):
 		m.showHelp = true
@@ -281,12 +329,31 @@ func (m Model) helpView() string {
 		}
 	}
 
-	box := m.theme.HelpBox.Render(
-		m.theme.HelpTitle.Render("payk — keybindings") + "\n" +
-			lipgloss.JoinHorizontal(lipgloss.Top, joinWithGap(columns, 4)...),
-	)
+	title := m.theme.HelpTitle.Render("payk — keybindings")
+	area := m.height - statusBarHeight
 
-	return lipgloss.Place(m.width, m.height-statusBarHeight, lipgloss.Center, lipgloss.Center, box)
+	box := m.theme.HelpBox.Render(
+		title + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, joinWithGap(columns, 4)...))
+	// Narrow terminals get the columns stacked vertically instead.
+	if lipgloss.Width(box) > m.width {
+		box = m.theme.HelpBox.Render(title + "\n" + strings.Join(columns, "\n\n"))
+	}
+	box = clampBlock(box, m.width, area)
+
+	return lipgloss.Place(m.width, area, lipgloss.Center, lipgloss.Center, box)
+}
+
+// clampBlock hard-limits a rendered block to width x height cells so an
+// overlay can never overflow the terminal.
+func clampBlock(block string, width, height int) string {
+	lines := strings.Split(block, "\n")
+	if len(lines) > height {
+		lines = lines[:max(height, 0)]
+	}
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "…")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) statusView() string {

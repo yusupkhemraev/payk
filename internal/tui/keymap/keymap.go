@@ -18,12 +18,21 @@ type KeyMap struct {
 	PrevPane      key.Binding
 	ToggleSidebar key.Binding
 
-	Up     key.Binding
-	Down   key.Binding
-	Top    key.Binding
-	Bottom key.Binding
-	Select key.Binding
-	Search key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Top      key.Binding
+	Bottom   key.Binding
+	HalfDown key.Binding
+	HalfUp   key.Binding
+	Select   key.Binding
+	Search   key.Binding
+
+	TabNext key.Binding
+	TabPrev key.Binding
+
+	Insert    key.Binding
+	AddRow    key.Binding
+	DeleteRow key.Binding
 
 	Send key.Binding
 	Edit key.Binding
@@ -87,9 +96,17 @@ func Default() KeyMap {
 			key.WithKeys("G"),
 			key.WithHelp("G", "go to bottom"),
 		),
+		HalfDown: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "half page down"),
+		),
+		HalfUp: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "half page up"),
+		),
 		Select: key.NewBinding(
 			key.WithKeys("enter", "o"),
-			key.WithHelp("enter", "open / toggle folder"),
+			key.WithHelp("enter", "open / toggle / cycle"),
 		),
 		Search: key.NewBinding(
 			key.WithKeys("/"),
@@ -97,10 +114,31 @@ func Default() KeyMap {
 			key.WithDisabled(), // wired in a later milestone
 		),
 
+		TabNext: key.NewBinding(
+			key.WithKeys("]"),
+			key.WithHelp("]", "next editor tab"),
+		),
+		TabPrev: key.NewBinding(
+			key.WithKeys("["),
+			key.WithHelp("[", "previous editor tab"),
+		),
+
+		Insert: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "edit field (insert mode)"),
+		),
+		AddRow: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add row"),
+		),
+		DeleteRow: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete row"),
+		),
+
 		Send: key.NewBinding(
 			key.WithKeys("space"),
 			key.WithHelp("space", "send request"),
-			key.WithDisabled(), // wired in a later milestone
 		),
 		Edit: key.NewBinding(
 			key.WithKeys("e"),
@@ -120,7 +158,8 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar},
-		{k.Up, k.Down, k.Top, k.Bottom, k.Select, k.Search},
+		{k.Up, k.Down, k.Top, k.Bottom, k.HalfDown, k.HalfUp, k.Select, k.Search},
+		{k.TabNext, k.TabPrev, k.Insert, k.AddRow, k.DeleteRow},
 		{k.Send, k.Edit, k.Command, k.Help, k.Quit},
 	}
 }

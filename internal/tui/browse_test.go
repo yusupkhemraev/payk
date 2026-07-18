@@ -45,11 +45,17 @@ func TestBrowseTreeAndOpenRequest(t *testing.T) {
 	waitForOutput(t, tm, "▸ users")
 
 	// Expand back, then walk down to "create user" and open it: the
-	// request panel must show its URL and headers.
+	// request editor must show its method and URL on the URL tab.
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tm.Send(keyPress('j'))
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "POST https://example.com/users", "Content-Type: application/json")
+	waitForOutput(t, tm, "https://example.com/users")
+
+	// Switch focus to the editor and flip to the Headers tab.
+	tm.Send(keyPress('l'))
+	tm.Send(keyPress(']'))
+	tm.Send(keyPress(']'))
+	waitForOutput(t, tm, "Content-Type = application/json")
 
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))

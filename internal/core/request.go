@@ -54,6 +54,15 @@ type Request struct {
 	Auth    Auth   `yaml:"auth,omitempty"`
 }
 
+// Clone returns a deep copy, used to snapshot a request before sending so
+// concurrent edits in the UI cannot race with the send goroutine.
+func (r *Request) Clone() *Request {
+	clone := *r
+	clone.Params = append([]KV(nil), r.Params...)
+	clone.Headers = append([]KV(nil), r.Headers...)
+	return &clone
+}
+
 // Normalize fills defaults: uppercase method, GET when method is empty, and
 // name as fallback for callers that loaded a request without one.
 func (r *Request) Normalize(fallbackName string) {

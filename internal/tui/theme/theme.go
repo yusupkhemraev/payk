@@ -42,6 +42,15 @@ type Theme struct {
 	Muted    lipgloss.Style
 	Selected lipgloss.Style
 
+	TabActive   lipgloss.Style
+	TabInactive lipgloss.Style
+	FieldLabel  lipgloss.Style
+
+	statusOK       lipgloss.Style
+	statusRedirect lipgloss.Style
+	statusClient   lipgloss.Style
+	statusServer   lipgloss.Style
+
 	methods map[string]lipgloss.Style
 }
 
@@ -110,6 +119,18 @@ func New(flavor catppuccin.Flavor) *Theme {
 		Foreground(flavor.Text()).
 		Bold(true)
 
+	t.TabActive = lipgloss.NewStyle().
+		Foreground(flavor.Mauve()).
+		Bold(true).
+		Underline(true)
+	t.TabInactive = lipgloss.NewStyle().Foreground(flavor.Overlay1())
+	t.FieldLabel = lipgloss.NewStyle().Foreground(flavor.Subtext0())
+
+	t.statusOK = lipgloss.NewStyle().Foreground(flavor.Green()).Bold(true)
+	t.statusRedirect = lipgloss.NewStyle().Foreground(flavor.Yellow()).Bold(true)
+	t.statusClient = lipgloss.NewStyle().Foreground(flavor.Peach()).Bold(true)
+	t.statusServer = lipgloss.NewStyle().Foreground(flavor.Red()).Bold(true)
+
 	t.methods = map[string]lipgloss.Style{
 		"GET":     lipgloss.NewStyle().Foreground(flavor.Green()).Bold(true),
 		"POST":    lipgloss.NewStyle().Foreground(flavor.Blue()).Bold(true),
@@ -159,4 +180,24 @@ func (t *Theme) Method(method string) lipgloss.Style {
 		return s
 	}
 	return lipgloss.NewStyle().Foreground(t.Subtext).Bold(true)
+}
+
+// Status returns the style for an HTTP status code.
+func (t *Theme) Status(code int) lipgloss.Style {
+	switch {
+	case code >= 500:
+		return t.statusServer
+	case code >= 400:
+		return t.statusClient
+	case code >= 300:
+		return t.statusRedirect
+	default:
+		return t.statusOK
+	}
+}
+
+// ChromaStyle returns the chroma syntax highlighting style name matching the
+// current Catppuccin flavor.
+func (t *Theme) ChromaStyle() string {
+	return "catppuccin-" + t.Flavor.Name()
 }
