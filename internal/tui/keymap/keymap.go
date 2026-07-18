@@ -55,8 +55,7 @@ func Default() KeyMap {
 		),
 		Command: key.NewBinding(
 			key.WithKeys(":"),
-			key.WithHelp(":", "command line"),
-			key.WithDisabled(), // wired in a later milestone
+			key.WithHelp(":", "command line (:q :w :send :env)"),
 		),
 
 		FocusLeft: key.NewBinding(

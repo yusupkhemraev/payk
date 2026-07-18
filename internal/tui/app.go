@@ -5,6 +5,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -13,6 +15,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/yusupkhemraev/payk/internal/core"
+	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
 	"github.com/yusupkhemraev/payk/internal/tui/theme"
@@ -63,6 +67,16 @@ type Model struct {
 	sending    bool
 	cancelSend context.CancelFunc
 
+	workspace *storage.Workspace
+	envs      *core.Environments
+	// selCollection/selPath locate the loaded request in the tree for :w.
+	selCollection string
+	selPath       []string
+
+	cmdline     cmdLine
+	statusMsg   string
+	statusIsErr bool
+
 	collections panels.Collections
 	request     panels.Request
 	response    panels.Response
@@ -79,6 +93,8 @@ func New(cfg Config) Model {
 		focus:          paneCollections,
 		lastMain:       paneRequest,
 		sidebarVisible: true,
+		envs:           &core.Environments{},
+		cmdline:        newCmdLine(),
 		collections:    panels.NewCollections(t, keys),
 		request:        panels.NewRequest(t, keys),
 		response:       panels.NewResponse(t, keys),
@@ -102,11 +118,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case workspaceLoadedMsg:
+		m.workspace = msg.workspace
+		m.envs = msg.environments
 		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
 		return m, nil
 
 	case panels.RequestSelectedMsg:
 		m.request.SetRequest(msg.Request)
+		m.selCollection = msg.Collection
+		m.selPath = msg.Path
+		return m, nil
+
+	case requestSavedMsg:
+		if msg.err != nil {
+			m.setStatus("write failed: "+msg.err.Error(), true)
+		} else {
+			m.setStatus("saved "+msg.name, false)
+		}
+		return m, nil
+
+	case environmentsSavedMsg:
+		if msg.err != nil {
+			m.setStatus("env save failed: "+msg.err.Error(), true)
+		}
 		return m, nil
 
 	case responseReceivedMsg:
@@ -126,20 +160,117 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// startSend snapshots the current request and fires it off, storing the
-// cancel func so esc can abort the send.
+// handleCmdlineKey drives the ":" command input while it is open.
+func (m Model) handleCmdlineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.cmdline.close()
+		return m, nil
+	case msg.Code == tea.KeyEnter:
+		line := m.cmdline.value()
+		m.cmdline.close()
+		return m.executeCommand(line)
+	}
+	return m, m.cmdline.update(msg)
+}
+
+// executeCommand runs a ":" command line.
+func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return m, nil
+	}
+
+	switch fields[0] {
+	case "q", "quit":
+		return m, tea.Quit
+
+	case "send":
+		return m.startSend()
+
+	case "w", "write":
+		req := m.request.CurrentRequest()
+		switch {
+		case req == nil:
+			m.setStatus("nothing to write — no request open", true)
+		case m.workspace == nil:
+			m.setStatus("no workspace to write into", true)
+		default:
+			return m, saveRequestCmd(m.workspace, m.selCollection, m.selPath, req)
+		}
+		return m, nil
+
+	case "env":
+		if len(fields) < 2 {
+			m.setStatus("usage: :env <name>", true)
+			return m, nil
+		}
+		return m.switchEnvironment(fields[1])
+
+	default:
+		m.setStatus("unknown command: "+fields[0], true)
+		return m, nil
+	}
+}
+
+func (m Model) switchEnvironment(name string) (tea.Model, tea.Cmd) {
+	if m.envs.Get(name) == nil {
+		m.setStatus("no such environment: "+name, true)
+		return m, nil
+	}
+	m.envs.Active = name
+	m.setStatus("environment: "+name, false)
+	if m.workspace == nil {
+		return m, nil
+	}
+	return m, saveEnvironmentsCmd(m.workspace, m.envs)
+}
+
+func (m *Model) setStatus(msg string, isErr bool) {
+	m.statusMsg = msg
+	m.statusIsErr = isErr
+}
+
+// activeVars returns the vars of the active environment, or nil.
+func (m Model) activeVars() map[string]string {
+	if env := m.envs.ActiveEnv(); env != nil {
+		return env.Vars
+	}
+	return nil
+}
+
+// startSend resolves {{var}} placeholders against the active environment and
+// fires the request off, storing the cancel func so esc can abort the send.
+// Resolution happens on an in-memory copy only — resolved secrets are never
+// written back to the tree or to disk.
 func (m Model) startSend() (tea.Model, tea.Cmd) {
 	req := m.request.CurrentRequest()
 	if req == nil || m.sending {
 		return m, nil
 	}
+
+	resolved, missing := core.ResolveRequest(req, m.activeVars(), os.LookupEnv)
+	if len(missing) > 0 {
+		env := m.envs.Active
+		if env == "" {
+			env = "none"
+		}
+		m.response.SetResponse(nil, fmt.Errorf(
+			"undefined variables: %s (active environment: %s)",
+			strings.Join(missing, ", "), env))
+		return m, nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	m.sending = true
 	m.cancelSend = cancel
-	return m, tea.Batch(m.response.StartSending(), sendRequestCmd(ctx, req.Clone()))
+	return m, tea.Batch(m.response.StartSending(), sendRequestCmd(ctx, resolved))
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Any keypress clears the previous transient status message.
+	m.statusMsg = ""
+
 	if m.showHelp {
 		switch {
 		case key.Matches(msg, m.keys.Help),
@@ -148,6 +279,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 		}
 		return m, nil
+	}
+
+	if m.cmdline.active {
+		return m.handleCmdlineKey(msg)
 	}
 
 	// Insert mode captures everything except ctrl+c, so typed text never
@@ -162,6 +297,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.Command):
+		return m, m.cmdline.open()
 
 	case key.Matches(msg, m.keys.Send):
 		return m.startSend()
@@ -357,11 +495,28 @@ func clampBlock(block string, width, height int) string {
 }
 
 func (m Model) statusView() string {
+	if m.cmdline.active {
+		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(" " + m.cmdline.view())
+	}
+
 	badge := m.theme.StatusBadge.Render("payk")
 	focus := m.theme.StatusFocus.Render(m.focus.String())
-	hint := m.theme.StatusHint.Render("? help · tab pane · q quit")
 
-	bar := lipgloss.JoinHorizontal(lipgloss.Top, badge, focus, hint)
+	segments := []string{badge, focus}
+	if m.envs.Active != "" {
+		segments = append(segments, m.theme.StatusFocus.Render("env:"+m.envs.Active))
+	}
+	if m.statusMsg != "" {
+		style := m.theme.StatusHint
+		if m.statusIsErr {
+			style = style.Foreground(m.theme.Flavor.Red())
+		}
+		segments = append(segments, style.Render(m.statusMsg))
+	} else {
+		segments = append(segments, m.theme.StatusHint.Render("? help · : cmd · q quit"))
+	}
+
+	bar := lipgloss.JoinHorizontal(lipgloss.Top, segments...)
 	return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(bar)
 }
 
