@@ -1,0 +1,5 @@
+$ curl -X POST 'https://example.com/login' \
+  -u 'admin:s3cret' \
+  -d 'username=admin' \
+  --data-urlencode 'note=hello world & more' \
+  -k -L --http1.1

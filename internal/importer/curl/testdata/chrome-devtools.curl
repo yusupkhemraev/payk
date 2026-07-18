@@ -1,0 +1,10 @@
+curl 'https://api.github.com/graphql' \
+  -H 'accept: application/json' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'authorization: Bearer ghp_exampletoken123' \
+  -H 'content-type: application/json' \
+  -b 'logged_in=yes; _gh_sess=abc123' \
+  -H 'origin: https://github.com' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' \
+  --data-raw '{"query":"query { viewer { login } }","variables":{}}' \
+  --compressed

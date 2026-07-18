@@ -10,6 +10,7 @@ require (
 	github.com/catppuccin/go v0.3.0
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260713092006-0d683c34c74b
+	github.com/mattn/go-shellwords v1.0.14
 	gopkg.in/yaml.v3 v3.0.1
 )
 

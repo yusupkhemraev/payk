@@ -16,6 +16,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/yusupkhemraev/payk/internal/core"
+	"github.com/yusupkhemraev/payk/internal/importer"
+	"github.com/yusupkhemraev/payk/internal/importer/curl"
 	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
@@ -77,6 +79,10 @@ type Model struct {
 	statusMsg   string
 	statusIsErr bool
 
+	importers []importer.Importer
+	// pendingImport holds pasted text awaiting the y/n import prompt.
+	pendingImport string
+
 	collections panels.Collections
 	request     panels.Request
 	response    panels.Response
@@ -95,6 +101,7 @@ func New(cfg Config) Model {
 		sidebarVisible: true,
 		envs:           &core.Environments{},
 		cmdline:        newCmdLine(),
+		importers:      []importer.Importer{curl.New()},
 		collections:    panels.NewCollections(t, keys),
 		request:        panels.NewRequest(t, keys),
 		response:       panels.NewResponse(t, keys),
@@ -137,6 +144,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.PasteMsg:
+		// Pasted curl commands offer an inline import prompt; anything else
+		// goes to the focused panel (e.g. an input in insert mode).
+		if !m.request.Editing() && !m.cmdline.active &&
+			importer.Find(m.importers, msg.Content) != nil {
+			m.pendingImport = msg.Content
+			return m, nil
+		}
+		return m.routeToFocused(msg)
+
+	case importFinishedMsg:
+		m.workspace = msg.workspace
+		if msg.err != nil {
+			m.setStatus("import failed: "+msg.err.Error(), true)
+			return m, nil
+		}
+		m.collections.SetWorkspace(msg.collections, true, nil)
+		status := "imported " + msg.imported
+		if len(msg.warnings) > 0 {
+			status += fmt.Sprintf(" (%d warnings: %s)", len(msg.warnings), strings.Join(msg.warnings, "; "))
+		}
+		m.setStatus(status, len(msg.warnings) > 0)
+		return m, nil
+
 	case environmentsSavedMsg:
 		if msg.err != nil {
 			m.setStatus("env save failed: "+msg.err.Error(), true)
@@ -156,6 +187,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	}
+	return m, nil
+}
+
+// handleImportPromptKey answers the inline "import as request?" prompt.
+func (m Model) handleImportPromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	input := m.pendingImport
+	switch msg.String() {
+	case "y", "Y", "enter":
+		m.pendingImport = ""
+		return m, runImportCmd(m.importers, m.workspace, input)
+	case "n", "N", "esc", "q":
+		m.pendingImport = ""
+		return m, nil
 	}
 	return m, nil
 }
@@ -279,6 +324,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 		}
 		return m, nil
+	}
+
+	if m.pendingImport != "" {
+		return m.handleImportPromptKey(msg)
 	}
 
 	if m.cmdline.active {
@@ -495,6 +544,11 @@ func clampBlock(block string, width, height int) string {
 }
 
 func (m Model) statusView() string {
+	if m.pendingImport != "" {
+		prompt := m.theme.StatusBadge.Render("import") + " " +
+			m.theme.StatusHint.Render("paste looks like a curl command — import as request? (y/n)")
+		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(prompt)
+	}
 	if m.cmdline.active {
 		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(" " + m.cmdline.view())
 	}
