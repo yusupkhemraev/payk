@@ -13,6 +13,13 @@ func keyPress(code rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: code, Text: string(code)}
 }
 
+// testConfig points the app at an empty temp workspace so tests never pick
+// up a real one from the environment.
+func testConfig(t *testing.T) Config {
+	t.Helper()
+	return Config{WorkspaceDir: t.TempDir()}
+}
+
 // waitForOutput blocks until every marker has appeared in program output.
 // WaitFor drains the output stream, so markers rendered together must be
 // awaited in a single call.
@@ -29,7 +36,7 @@ func waitForOutput(t *testing.T, tm *teatest.TestModel, markers ...string) {
 }
 
 func TestStartupShowsAllPanesAndQuits(t *testing.T) {
-	tm := teatest.NewTestModel(t, New(), teatest.WithInitialTermSize(140, 40))
+	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 
 	waitForOutput(t, tm, "Collections", "Request", "Response", "payk")
 
@@ -38,7 +45,7 @@ func TestStartupShowsAllPanesAndQuits(t *testing.T) {
 }
 
 func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
-	tm := teatest.NewTestModel(t, New(), teatest.WithInitialTermSize(140, 40))
+	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 	waitForOutput(t, tm, "Collections")
 
 	tm.Send(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -52,7 +59,7 @@ func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
 }
 
 func TestHelpOverlayTogglesOpenAndClosed(t *testing.T) {
-	tm := teatest.NewTestModel(t, New(), teatest.WithInitialTermSize(140, 40))
+	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 	waitForOutput(t, tm, "Collections")
 
 	tm.Send(keyPress('?'))
@@ -66,7 +73,7 @@ func TestHelpOverlayTogglesOpenAndClosed(t *testing.T) {
 }
 
 func TestFocusSwitchingUpdatesStatusBar(t *testing.T) {
-	tm := teatest.NewTestModel(t, New(), teatest.WithInitialTermSize(140, 40))
+	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 	waitForOutput(t, tm, "collections")
 
 	tm.Send(keyPress('l'))

@@ -10,9 +10,17 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/yusupkhemraev/payk/internal/tui/keymap"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
 	"github.com/yusupkhemraev/payk/internal/tui/theme"
 )
+
+// Config is the runtime configuration of the TUI.
+type Config struct {
+	// WorkspaceDir points at a .payk directory explicitly; empty means
+	// discover one from the working directory.
+	WorkspaceDir string
+}
 
 type pane int
 
@@ -36,8 +44,9 @@ func (p pane) String() string {
 
 // Model is the root model composing the three panels and the status bar.
 type Model struct {
+	cfg   Config
 	theme *theme.Theme
-	keys  keyMap
+	keys  keymap.KeyMap
 
 	width  int
 	height int
@@ -54,15 +63,17 @@ type Model struct {
 }
 
 // New builds the root model with the default theme.
-func New() Model {
+func New(cfg Config) Model {
 	t := theme.Default()
+	keys := keymap.Default()
 	m := Model{
+		cfg:            cfg,
 		theme:          t,
-		keys:           defaultKeyMap(),
+		keys:           keys,
 		focus:          paneCollections,
 		lastMain:       paneRequest,
 		sidebarVisible: true,
-		collections:    panels.NewCollections(t),
+		collections:    panels.NewCollections(t, keys),
 		request:        panels.NewRequest(t),
 		response:       panels.NewResponse(t),
 	}
@@ -72,7 +83,7 @@ func New() Model {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return loadWorkspaceCmd(m.cfg)
 }
 
 // Update implements tea.Model; it only routes messages and tracks focus.
@@ -82,6 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.applyLayout()
+		return m, nil
+
+	case workspaceLoadedMsg:
+		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
+		return m, nil
+
+	case panels.RequestSelectedMsg:
+		m.request.SetRequest(msg.Request)
 		return m, nil
 
 	case tea.KeyPressMsg:

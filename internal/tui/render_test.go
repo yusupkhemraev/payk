@@ -11,7 +11,7 @@ import (
 // renderAt returns the plain-text render of the root model at a terminal size.
 func renderAt(t *testing.T, width, height int, msgs ...tea.Msg) string {
 	t.Helper()
-	var m tea.Model = New()
+	var m tea.Model = New(Config{})
 	m, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	for _, msg := range msgs {
 		m, _ = m.Update(msg)

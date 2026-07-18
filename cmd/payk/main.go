@@ -23,7 +23,7 @@ func main() {
 		return
 	}
 
-	program := tea.NewProgram(tui.New())
+	program := tea.NewProgram(tui.New(tui.Config{}))
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "payk:", err)
 		os.Exit(1)

@@ -1,4 +1,5 @@
 /payk
 /dist/
+/.payk/
 .idea/
 .DS_Store

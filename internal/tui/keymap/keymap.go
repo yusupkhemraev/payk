@@ -1,10 +1,12 @@
-package tui
+// Package keymap is the central registry of all key bindings, so they stay
+// discoverable in the help overlay and rebindable from config later. Panels
+// receive the KeyMap instead of defining their own bindings.
+package keymap
 
 import "charm.land/bubbles/v2/key"
 
-// keyMap is the central registry of all bindings, so they stay discoverable
-// in the help overlay and rebindable from config later.
-type keyMap struct {
+// KeyMap holds every binding used across the TUI.
+type KeyMap struct {
 	Quit    key.Binding
 	Help    key.Binding
 	Escape  key.Binding
@@ -20,14 +22,16 @@ type keyMap struct {
 	Down   key.Binding
 	Top    key.Binding
 	Bottom key.Binding
+	Select key.Binding
 	Search key.Binding
 
 	Send key.Binding
 	Edit key.Binding
 }
 
-func defaultKeyMap() keyMap {
-	return keyMap{
+// Default returns the standard vim-style key map.
+func Default() KeyMap {
+	return KeyMap{
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
@@ -83,6 +87,10 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("G"),
 			key.WithHelp("G", "go to bottom"),
 		),
+		Select: key.NewBinding(
+			key.WithKeys("enter", "o"),
+			key.WithHelp("enter", "open / toggle folder"),
+		),
 		Search: key.NewBinding(
 			key.WithKeys("/"),
 			key.WithHelp("/", "search in pane"),
@@ -103,16 +111,16 @@ func defaultKeyMap() keyMap {
 }
 
 // ShortHelp implements help.KeyMap.
-func (k keyMap) ShortHelp() []key.Binding {
+func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Help, k.NextPane, k.Quit}
 }
 
 // FullHelp implements help.KeyMap; columns group related bindings for the
 // help overlay.
-func (k keyMap) FullHelp() [][]key.Binding {
+func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar},
-		{k.Up, k.Down, k.Top, k.Bottom, k.Search},
+		{k.Up, k.Down, k.Top, k.Bottom, k.Select, k.Search},
 		{k.Send, k.Edit, k.Command, k.Help, k.Quit},
 	}
 }
