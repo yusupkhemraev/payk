@@ -19,6 +19,7 @@ import (
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/importer"
 	"github.com/yusupkhemraev/payk/internal/importer/curl"
+	"github.com/yusupkhemraev/payk/internal/importer/fastapi"
 	"github.com/yusupkhemraev/payk/internal/importer/openapi"
 	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
@@ -105,7 +106,7 @@ func New(cfg Config) Model {
 		sidebarVisible: true,
 		envs:           &core.Environments{},
 		cmdline:        newCmdLine(),
-		importers:      []importer.Importer{curl.New(), openapi.New()},
+		importers:      []importer.Importer{curl.New(), openapi.New(), fastapi.New()},
 		collections:    panels.NewCollections(t, keys),
 		request:        panels.NewRequest(t, keys),
 		response:       panels.NewResponse(t, keys),
@@ -229,6 +230,8 @@ func pasteKindLabel(name string) string {
 		return "a curl command"
 	case "openapi":
 		return "an OpenAPI spec"
+	case "fastapi":
+		return "a FastAPI project"
 	default:
 		return "importable input"
 	}
