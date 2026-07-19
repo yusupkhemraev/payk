@@ -38,6 +38,7 @@ type KeyMap struct {
 
 	Send key.Binding
 	Edit key.Binding
+	Wrap key.Binding
 }
 
 // Default returns the standard vim-style key map.
@@ -153,6 +154,10 @@ func Default() KeyMap {
 			key.WithHelp("e", "open in $EDITOR"),
 			key.WithDisabled(), // wired in a later milestone
 		),
+		Wrap: key.NewBinding(
+			key.WithKeys("w"),
+			key.WithHelp("w", "wrap long lines"),
+		),
 	}
 }
 
@@ -167,7 +172,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar},
 		{k.Up, k.Down, k.Top, k.Bottom, k.HalfDown, k.HalfUp, k.Select},
-		{k.Search, k.SearchNext, k.SearchPrev, k.TabNext, k.TabPrev},
+		{k.Search, k.SearchNext, k.SearchPrev, k.TabNext, k.TabPrev, k.Wrap},
 		{k.Insert, k.AddRow, k.DeleteRow, k.Send, k.Edit},
 		{k.Command, k.Help, k.Quit},
 	}

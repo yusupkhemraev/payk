@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/alecthomas/chroma/v2/quick"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/yusupkhemraev/payk/internal/httpc"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
@@ -63,6 +64,13 @@ type Response struct {
 	renderedLines []string
 	matches       []int
 	matchIdx      int
+
+	// wrap soft-wraps long lines in the body and headers tabs.
+	wrap bool
+	// lineOffsets maps original body line index to wrapped viewport line.
+	lineOffsets  []int
+	headersLines []string
+	timingsLines []string
 }
 
 // NewResponse builds the response viewer panel.
@@ -99,9 +107,21 @@ func (m *Response) SetResponse(resp *httpc.Response, err error) {
 		plain := m.plainBody(resp)
 		m.plainLines = strings.Split(plain, "\n")
 		m.renderedLines = strings.Split(m.highlightBody(resp, plain), "\n")
+		m.headersLines = m.buildHeaderLines(resp)
+		m.timingsLines = m.buildTimingLines(resp)
 		m.syncViewport()
 		m.vp.GotoTop()
 	}
+}
+
+// setTab switches the viewport to another tab's content.
+func (m *Response) setTab(tab respTab) {
+	if m.tab == tab {
+		return
+	}
+	m.tab = tab
+	m.syncViewport()
+	m.vp.GotoTop()
 }
 
 func (m *Response) closeSearch() {
@@ -118,26 +138,59 @@ func (m *Response) searchBarVisible() bool {
 func (m *Response) syncViewportHeight() {
 	// Frame (3) + tab bar (2) + status line (2) rows around the viewport.
 	height := m.height - 7
-	if m.searchBarVisible() {
+	if m.tab == respBody && m.searchBarVisible() {
 		height--
 	}
 	m.vp.SetHeight(max(height, 1))
 }
 
-// syncViewport rebuilds the viewport content, highlighting the current
-// search match line.
+// syncViewport rebuilds the viewport content for the active tab, applying
+// search highlighting and soft wrapping.
 func (m *Response) syncViewport() {
 	m.syncViewportHeight()
-	if len(m.matches) == 0 || m.query == "" {
-		m.vp.SetContentLines(m.renderedLines)
-		return
+	switch m.tab {
+	case respHeaders:
+		m.vp.SetContentLines(m.wrapLines(m.headersLines, nil))
+	case respTimings:
+		m.vp.SetContentLines(m.timingsLines)
+	default:
+		m.vp.SetContentLines(m.bodyLines())
 	}
-	lines := append([]string(nil), m.renderedLines...)
-	current := m.matches[m.matchIdx]
-	if current < len(lines) {
-		lines[current] = m.theme.Selected.Render(m.plainLines[current])
+}
+
+func (m *Response) bodyLines() []string {
+	lines := m.renderedLines
+	if len(m.matches) > 0 && m.query != "" {
+		lines = append([]string(nil), m.renderedLines...)
+		current := m.matches[m.matchIdx]
+		if current < len(lines) {
+			lines[current] = m.theme.Selected.Render(m.plainLines[current])
+		}
 	}
-	m.vp.SetContentLines(lines)
+	return m.wrapLines(lines, &m.lineOffsets)
+}
+
+// wrapLines soft-wraps each line at the viewport width when wrap is on,
+// optionally recording where each original line starts.
+func (m *Response) wrapLines(lines []string, offsets *[]int) []string {
+	if !m.wrap {
+		if offsets != nil {
+			*offsets = nil
+		}
+		return lines
+	}
+	width := max(m.vp.Width(), 10)
+	var wrapped []string
+	if offsets != nil {
+		*offsets = make([]int, len(lines))
+	}
+	for i, line := range lines {
+		if offsets != nil {
+			(*offsets)[i] = len(wrapped)
+		}
+		wrapped = append(wrapped, strings.Split(ansi.Hardwrap(line, width, true), "\n")...)
+	}
+	return wrapped
 }
 
 func (m *Response) computeMatches() {
@@ -160,7 +213,11 @@ func (m *Response) jumpToMatch() {
 	if len(m.matches) == 0 {
 		return
 	}
-	m.vp.SetYOffset(max(m.matches[m.matchIdx]-2, 0))
+	target := m.matches[m.matchIdx]
+	if m.wrap && target < len(m.lineOffsets) {
+		target = m.lineOffsets[target]
+	}
+	m.vp.SetYOffset(max(target-2, 0))
 }
 
 // SetSize sets the outer box size, borders included.
@@ -224,10 +281,14 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	case key.Matches(msg, m.keys.SearchPrev):
 		m.cycleMatch(-1)
 
+	case key.Matches(msg, m.keys.Wrap):
+		m.wrap = !m.wrap
+		m.syncViewport()
+
 	case key.Matches(msg, m.keys.TabNext):
-		m.tab = respTab((int(m.tab) + 1) % len(respTabNames))
+		m.setTab(respTab((int(m.tab) + 1) % len(respTabNames)))
 	case key.Matches(msg, m.keys.TabPrev):
-		m.tab = respTab((int(m.tab) + len(respTabNames) - 1) % len(respTabNames))
+		m.setTab(respTab((int(m.tab) + len(respTabNames) - 1) % len(respTabNames)))
 	case key.Matches(msg, m.keys.Down):
 		m.vp.ScrollDown(1)
 	case key.Matches(msg, m.keys.Up):
@@ -301,18 +362,12 @@ func (m Response) body() string {
 
 func (m Response) renderResponse(b *strings.Builder) {
 	fmt.Fprintf(b, "%s\n\n", m.statusLine())
-
-	switch m.tab {
-	case respBody:
+	if m.tab == respBody {
 		if line := m.searchLine(); line != "" {
 			fmt.Fprintf(b, "%s\n", line)
 		}
-		b.WriteString(m.vp.View())
-	case respHeaders:
-		m.renderHeaders(b)
-	case respTimings:
-		m.renderTimings(b)
 	}
+	b.WriteString(m.vp.View())
 }
 
 // searchLine renders the "/" input or the committed query with match count.
@@ -339,7 +394,28 @@ func (m Response) statusLine() string {
 	if m.resp.Truncated {
 		line += " " + m.theme.Status(400).Render("(truncated)")
 	}
+	if pos := m.scrollIndicator(); pos != "" {
+		line += " " + m.theme.Muted.Render(pos)
+	}
 	return line
+}
+
+// scrollIndicator shows the visible line range and position for content
+// taller than the viewport, plus the wrap state.
+func (m Response) scrollIndicator() string {
+	total := m.vp.TotalLineCount()
+	visible := m.vp.VisibleLineCount()
+	var parts []string
+	if total > visible {
+		from := m.vp.YOffset() + 1
+		to := min(m.vp.YOffset()+visible, total)
+		parts = append(parts, fmt.Sprintf("· %d–%d/%d (%d%%)",
+			from, to, total, int(m.vp.ScrollPercent()*100)))
+	}
+	if m.wrap {
+		parts = append(parts, "· wrap")
+	}
+	return strings.Join(parts, " ")
 }
 
 func (m Response) tabBar() string {
@@ -394,22 +470,24 @@ func looksLikeJSON(resp *httpc.Response) bool {
 	return len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 }
 
-func (m Response) renderHeaders(b *strings.Builder) {
-	names := make([]string, 0, len(m.resp.Headers))
-	for name := range m.resp.Headers {
+func (m Response) buildHeaderLines(resp *httpc.Response) []string {
+	names := make([]string, 0, len(resp.Headers))
+	for name := range resp.Headers {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
+	var lines []string
 	for _, name := range names {
-		for _, value := range m.resp.Headers[name] {
-			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(name+":"), value)
+		for _, value := range resp.Headers[name] {
+			lines = append(lines, " "+m.theme.FieldLabel.Render(name+":")+" "+value)
 		}
 	}
+	return lines
 }
 
-func (m Response) renderTimings(b *strings.Builder) {
-	t := m.resp.Timings
+func (m Response) buildTimingLines(resp *httpc.Response) []string {
+	t := resp.Timings
 	rows := []struct {
 		label string
 		value time.Duration
@@ -420,15 +498,18 @@ func (m Response) renderTimings(b *strings.Builder) {
 		{"TTFB", t.TTFB},
 		{"Total", t.Total},
 	}
+	var lines []string
 	for _, row := range rows {
 		value := "—"
 		if row.value > 0 {
 			value = formatDuration(row.value)
 		}
-		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", row.label)), value)
+		lines = append(lines, " "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", row.label))+" "+value)
 	}
-	fmt.Fprintf(b, "\n %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Size")), formatSize(m.resp.Size()))
-	fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Status")), m.resp.Status)
+	lines = append(lines, "",
+		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Size"))+" "+formatSize(resp.Size()),
+		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Status"))+" "+resp.Status)
+	return lines
 }
 
 func formatDuration(d time.Duration) string {
