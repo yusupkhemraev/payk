@@ -46,10 +46,10 @@ func TestHeadersTabScrolls(t *testing.T) {
 
 	m = typeString(m, "]") // headers tab
 	view := plainView(m)
-	if !strings.Contains(view, "X-Header-00:") {
+	if !strings.Contains(view, "X-Header-00 ") {
 		t.Fatalf("first header missing:\n%s", view)
 	}
-	if strings.Contains(view, "X-Header-39:") {
+	if strings.Contains(view, "X-Header-39 ") {
 		t.Fatal("last header should be below the fold before scrolling")
 	}
 	if !strings.Contains(view, "1–") || !strings.Contains(view, "%)") {
@@ -59,7 +59,7 @@ func TestHeadersTabScrolls(t *testing.T) {
 	// G jumps to the bottom: the last header becomes visible.
 	m = typeString(m, "G")
 	view = plainView(m)
-	if !strings.Contains(view, "X-Header-39:") {
+	if !strings.Contains(view, "X-Header-39 ") {
 		t.Errorf("G should reveal the last header:\n%s", view)
 	}
 	// The percentage may be clipped by the frame; the range is enough.

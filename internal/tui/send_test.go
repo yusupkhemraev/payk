@@ -53,7 +53,7 @@ func TestSendRequestShowsResponse(t *testing.T) {
 	tm.Send(keyPress('l'))
 	tm.Send(keyPress('l'))
 	tm.Send(keyPress(']'))
-	waitForOutput(t, tm, "X-Marker:", "payk-test")
+	waitForOutput(t, tm, "X-Marker", "payk-test")
 	tm.Send(keyPress(']'))
 	waitForOutput(t, tm, "TTFB", "Total", "Size")
 

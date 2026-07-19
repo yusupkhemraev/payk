@@ -100,6 +100,42 @@ func (w *Workspace) SaveRequest(collection string, folders []string, req *core.R
 	return nil
 }
 
+// RenameRequest renames a request in place: the name field changes and the
+// file moves to the slug of the new name.
+func (w *Workspace) RenameRequest(collection string, folders []string, req *core.Request, newName string) error {
+	dir := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
+	oldPath := filepath.Join(dir, slug(req.Name)+".yaml")
+
+	req.Name = newName
+	if err := w.SaveRequest(collection, folders, req); err != nil {
+		return err
+	}
+	newPath := filepath.Join(dir, slug(newName)+".yaml")
+	if oldPath != newPath {
+		if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("storage: remove old request file: %w", err)
+		}
+	}
+	return nil
+}
+
+// RenameFolder renames a folder directory. An empty path renames the
+// collection itself.
+func (w *Workspace) RenameFolder(collection string, folders []string, newName string) error {
+	parent := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
+	newPath := filepath.Join(filepath.Dir(parent), slug(newName))
+	if parent == newPath {
+		return nil
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("storage: %q already exists", filepath.Base(newPath))
+	}
+	if err := os.Rename(parent, newPath); err != nil {
+		return fmt.Errorf("storage: rename folder: %w", err)
+	}
+	return nil
+}
+
 func marshalYAML(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

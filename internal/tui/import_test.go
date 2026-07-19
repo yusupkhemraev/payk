@@ -23,9 +23,21 @@ func TestImportCommandLoadsOpenAPISpec(t *testing.T) {
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	view := plainView(m)
-	for _, want := range []string{"swagger-petstore", "pets", "store", "List pets", "Create a pet"} {
+	for _, want := range []string{"swagger-petstore", "pets", "store"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("tree missing %q after import:\n%s", want, view)
+		}
+	}
+
+	// Folders start collapsed; walk to pets (row 2 after healthz) and
+	// expand it to see its requests.
+	m = stepMsg(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	m = stepMsg(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	view = plainView(m)
+	for _, want := range []string{"List pets", "Create a pet"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("expanded folder missing %q:\n%s", want, view)
 		}
 	}
 

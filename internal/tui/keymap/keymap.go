@@ -36,9 +36,14 @@ type KeyMap struct {
 	AddRow    key.Binding
 	DeleteRow key.Binding
 
-	Send key.Binding
-	Edit key.Binding
-	Wrap key.Binding
+	Send   key.Binding
+	Edit   key.Binding
+	Wrap   key.Binding
+	Zoom   key.Binding
+	Rename key.Binding
+	Raw    key.Binding
+	Format key.Binding
+	Yank   key.Binding
 }
 
 // Default returns the standard vim-style key map.
@@ -151,12 +156,31 @@ func Default() KeyMap {
 		),
 		Edit: key.NewBinding(
 			key.WithKeys("e"),
-			key.WithHelp("e", "open in $EDITOR"),
-			key.WithDisabled(), // wired in a later milestone
+			key.WithHelp("e", "edit body in $EDITOR"),
 		),
 		Wrap: key.NewBinding(
 			key.WithKeys("w"),
 			key.WithHelp("w", "wrap long lines"),
+		),
+		Zoom: key.NewBinding(
+			key.WithKeys("z"),
+			key.WithHelp("z", "fullscreen pane"),
+		),
+		Rename: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "rename (tree)"),
+		),
+		Raw: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "raw/pretty body (response)"),
+		),
+		Format: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "format JSON body"),
+		),
+		Yank: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "copy response body"),
 		),
 	}
 }
@@ -170,10 +194,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // help overlay.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar},
+		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar, k.Zoom},
 		{k.Up, k.Down, k.Top, k.Bottom, k.HalfDown, k.HalfUp, k.Select},
 		{k.Search, k.SearchNext, k.SearchPrev, k.TabNext, k.TabPrev, k.Wrap},
-		{k.Insert, k.AddRow, k.DeleteRow, k.Send, k.Edit},
-		{k.Command, k.Help, k.Quit},
+		{k.Insert, k.AddRow, k.DeleteRow, k.Rename, k.Format, k.Edit},
+		{k.Send, k.Yank, k.Raw, k.Command, k.Help, k.Quit},
 	}
 }

@@ -67,6 +67,9 @@ type Response struct {
 
 	// wrap soft-wraps long lines in the body and headers tabs.
 	wrap bool
+	// raw switches the body tab to the unformatted response bytes.
+	raw      bool
+	rawLines []string
 	// lineOffsets maps original body line index to wrapped viewport line.
 	lineOffsets  []int
 	headersLines []string
@@ -103,15 +106,33 @@ func (m *Response) SetResponse(resp *httpc.Response, err error) {
 	m.closeSearch()
 	m.query = ""
 	m.matches = nil
+	m.raw = false
 	if resp != nil {
 		plain := m.plainBody(resp)
 		m.plainLines = strings.Split(plain, "\n")
 		m.renderedLines = strings.Split(m.highlightBody(resp, plain), "\n")
+		m.rawLines = strings.Split(string(resp.Body), "\n")
 		m.headersLines = m.buildHeaderLines(resp)
 		m.timingsLines = m.buildTimingLines(resp)
 		m.syncViewport()
 		m.vp.GotoTop()
 	}
+}
+
+// activePlain returns the body lines search should match against.
+func (m *Response) activePlain() []string {
+	if m.raw {
+		return m.rawLines
+	}
+	return m.plainLines
+}
+
+// activeRendered returns the body lines shown in the viewport.
+func (m *Response) activeRendered() []string {
+	if m.raw {
+		return m.rawLines
+	}
+	return m.renderedLines
 }
 
 // setTab switches the viewport to another tab's content.
@@ -159,12 +180,12 @@ func (m *Response) syncViewport() {
 }
 
 func (m *Response) bodyLines() []string {
-	lines := m.renderedLines
+	lines := m.activeRendered()
 	if len(m.matches) > 0 && m.query != "" {
-		lines = append([]string(nil), m.renderedLines...)
+		lines = append([]string(nil), lines...)
 		current := m.matches[m.matchIdx]
 		if current < len(lines) {
-			lines[current] = m.theme.Selected.Render(m.plainLines[current])
+			lines[current] = m.theme.Selected.Render(m.activePlain()[current])
 		}
 	}
 	return m.wrapLines(lines, &m.lineOffsets)
@@ -200,7 +221,7 @@ func (m *Response) computeMatches() {
 	if query == "" {
 		return
 	}
-	for i, line := range m.plainLines {
+	for i, line := range m.activePlain() {
 		if strings.Contains(strings.ToLower(line), query) {
 			m.matches = append(m.matches, i)
 		}
@@ -284,6 +305,23 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	case key.Matches(msg, m.keys.Wrap):
 		m.wrap = !m.wrap
 		m.syncViewport()
+
+	case key.Matches(msg, m.keys.Raw):
+		if m.resp != nil && m.tab == respBody {
+			m.raw = !m.raw
+			m.computeMatches()
+			m.syncViewport()
+			m.vp.GotoTop()
+		}
+
+	case key.Matches(msg, m.keys.Yank):
+		if m.resp != nil {
+			body := strings.Join(m.activePlain(), "\n")
+			return m, tea.Batch(
+				tea.SetClipboard(body),
+				noteCmd(fmt.Sprintf("copied %s to clipboard", formatSize(len(body))), false),
+			)
+		}
 
 	case key.Matches(msg, m.keys.TabNext):
 		m.setTab(respTab((int(m.tab) + 1) % len(respTabNames)))
@@ -415,12 +453,18 @@ func (m Response) scrollIndicator() string {
 	if m.wrap {
 		parts = append(parts, "· wrap")
 	}
+	if m.raw {
+		parts = append(parts, "· raw")
+	}
 	return strings.Join(parts, " ")
 }
 
 func (m Response) tabBar() string {
 	var parts []string
 	for i, name := range respTabNames {
+		if respTab(i) == respHeaders && m.resp != nil {
+			name = fmt.Sprintf("%s (%d)", name, len(m.resp.Headers))
+		}
 		style := m.theme.TabInactive
 		if respTab(i) == m.tab {
 			style = m.theme.TabActive
@@ -470,17 +514,22 @@ func looksLikeJSON(resp *httpc.Response) bool {
 	return len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 }
 
+// buildHeaderLines renders headers as an aligned two-column table.
 func (m Response) buildHeaderLines(resp *httpc.Response) []string {
 	names := make([]string, 0, len(resp.Headers))
+	nameWidth := 0
 	for name := range resp.Headers {
 		names = append(names, name)
+		nameWidth = max(nameWidth, len(name))
 	}
 	sort.Strings(names)
+	nameWidth = min(nameWidth, 30)
 
 	var lines []string
 	for _, name := range names {
 		for _, value := range resp.Headers[name] {
-			lines = append(lines, " "+m.theme.FieldLabel.Render(name+":")+" "+value)
+			padded := fmt.Sprintf("%-*s", nameWidth, name)
+			lines = append(lines, " "+m.theme.FieldLabel.Render(padded)+"  "+value)
 		}
 	}
 	return lines

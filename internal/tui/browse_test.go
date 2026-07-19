@@ -36,17 +36,17 @@ func TestBrowseTreeAndOpenRequest(t *testing.T) {
 	cfg := Config{WorkspaceDir: fixtureWorkspace(t)}
 	tm := teatest.NewTestModel(t, New(cfg), teatest.WithInitialTermSize(140, 40))
 
-	// Tree loads: collection, folder, and requests are visible.
-	waitForOutput(t, tm, "api", "users", "list users", "create user", "ping")
+	// Tree loads with folders collapsed: the folder row and root-level
+	// request are visible, folder contents are not.
+	waitForOutput(t, tm, "api", "▸ users", "ping")
 
-	// j moves to the folder row, enter collapses it.
+	// j moves to the folder row, enter expands it.
 	tm.Send(keyPress('j'))
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "▸ users")
+	waitForOutput(t, tm, "▾ users", "list users", "create user")
 
-	// Expand back, then walk down to "create user" and open it: the
-	// request editor must show its method and URL on the URL tab.
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	// Walk down to "create user" and open it: the request editor must show
+	// its method and URL on the URL tab.
 	tm.Send(keyPress('j'))
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitForOutput(t, tm, "https://example.com/users")

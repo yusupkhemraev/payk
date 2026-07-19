@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -68,6 +69,7 @@ type Model struct {
 	lastMain       pane
 	sidebarVisible bool
 	showHelp       bool
+	zoomed         bool
 
 	sending    bool
 	cancelSend context.CancelFunc
@@ -148,6 +150,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.setStatus("saved "+msg.name, false)
 		}
+		return m, nil
+
+	case panels.StatusNote:
+		m.setStatus(msg.Text, msg.IsErr)
+		return m, nil
+
+	case panels.RenameRequestedMsg:
+		if m.workspace == nil {
+			m.setStatus("no workspace to rename in", true)
+			return m, nil
+		}
+		return m, renameCmd(m.workspace, m.cfg, msg)
+
+	case panels.EditBodyRequestedMsg:
+		return m, openEditorCmd(msg)
+
+	case editorFinishedMsg:
+		if msg.err != nil {
+			m.setStatus("editor: "+msg.err.Error(), true)
+			return m, nil
+		}
+		m.request.SetBodyContent(msg.content)
+		m.setStatus("body updated from editor", false)
 		return m, nil
 
 	case tea.PasteMsg:
@@ -289,7 +314,7 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 			m.setStatus("usage: :import <file-or-url>", true)
 			return m, nil
 		}
-		input := strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
+		input := expandHome(strings.TrimSpace(strings.TrimPrefix(line, fields[0])))
 		if importer.Find(m.importers, input) == nil {
 			m.setStatus("no importer can handle: "+input, true)
 			return m, nil
@@ -327,6 +352,16 @@ func (m *Model) syncEditorEnvironment() {
 	}
 	sort.Strings(names)
 	m.request.SetEnvironment(names, osEnvNames())
+}
+
+// expandHome resolves a leading ~ so shell-style paths work in commands.
+func expandHome(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(path, "~"))
+		}
+	}
+	return path
 }
 
 // osEnvNames returns sorted process environment variable names.
@@ -405,10 +440,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleCmdlineKey(msg)
 	}
 
-	// Insert mode and pane-local search inputs capture everything except
-	// ctrl+c, so typed text never triggers global shortcuts.
+	// Insert mode and pane-local inputs (search, rename) capture everything
+	// except ctrl+c, so typed text never triggers global shortcuts.
 	captured := (m.focus == paneRequest && m.request.Editing()) ||
-		(m.focus == paneCollections && m.collections.Searching()) ||
+		(m.focus == paneCollections && m.collections.Capturing()) ||
 		(m.focus == paneResponse && m.response.Searching())
 	if captured {
 		if msg.String() == "ctrl+c" {
@@ -439,6 +474,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.ToggleSidebar):
 		m.sidebarVisible = !m.sidebarVisible
+		m.applyLayout()
+		return m, nil
+
+	case key.Matches(msg, m.keys.Zoom):
+		m.zoomed = !m.zoomed
 		m.applyLayout()
 		return m, nil
 
@@ -513,6 +553,11 @@ func (m *Model) applyFocus() {
 
 func (m *Model) applyLayout() {
 	m.sizes = layout(m.width, m.height, m.sidebarVisible)
+	if m.zoomed {
+		// The focused pane takes the whole content area.
+		full := PanelSize{Width: m.width, Height: m.height - statusBarHeight}
+		m.sizes.Collections, m.sizes.Request, m.sizes.Response = full, full, full
+	}
 	m.collections.SetSize(m.sizes.Collections.Width, m.sizes.Collections.Height)
 	m.request.SetSize(m.sizes.Request.Width, m.sizes.Request.Height)
 	m.response.SetSize(m.sizes.Response.Width, m.sizes.Response.Height)
@@ -542,6 +587,17 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) panesView() string {
+	if m.zoomed {
+		switch m.focus {
+		case paneRequest:
+			return m.request.View()
+		case paneResponse:
+			return m.response.View()
+		default:
+			return m.collections.View()
+		}
+	}
+
 	switch m.sizes.Mode {
 	case ModeTriple:
 		return lipgloss.JoinHorizontal(
@@ -634,14 +690,23 @@ func (m Model) statusView() string {
 	if m.envs.Active != "" {
 		segments = append(segments, m.theme.StatusFocus.Render("env:"+m.envs.Active))
 	}
+	if m.zoomed {
+		segments = append(segments, m.theme.StatusFocus.Render("zoom"))
+	}
+
+	// The trailing segment (message or hint) shrinks to whatever width the
+	// fixed segments leave over, so the bar never overflows.
+	used := lipgloss.Width(lipgloss.JoinHorizontal(lipgloss.Top, segments...))
+	remaining := max(m.width-used-1, 0)
 	if m.statusMsg != "" {
 		style := m.theme.StatusHint
 		if m.statusIsErr {
 			style = style.Foreground(m.theme.Flavor.Red())
 		}
-		segments = append(segments, style.Render(m.statusMsg))
+		segments = append(segments, style.Render(ansi.Truncate(m.statusMsg, remaining, "…")))
 	} else {
-		segments = append(segments, m.theme.StatusHint.Render("? help · : cmd · q quit"))
+		segments = append(segments, m.theme.StatusHint.Render(
+			ansi.Truncate("? help · : cmd · z zoom · q quit", remaining, "…")))
 	}
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Top, segments...)

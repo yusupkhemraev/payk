@@ -45,13 +45,14 @@ func (a Auth) IsZero() bool {
 
 // Request is a single HTTP request definition.
 type Request struct {
-	Name    string `yaml:"name"`
-	Method  string `yaml:"method"`
-	URL     string `yaml:"url"`
-	Params  []KV   `yaml:"params,omitempty"`
-	Headers []KV   `yaml:"headers,omitempty"`
-	Body    Body   `yaml:"body,omitempty"`
-	Auth    Auth   `yaml:"auth,omitempty"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+	Method      string `yaml:"method"`
+	URL         string `yaml:"url"`
+	Params      []KV   `yaml:"params,omitempty"`
+	Headers     []KV   `yaml:"headers,omitempty"`
+	Body        Body   `yaml:"body,omitempty"`
+	Auth        Auth   `yaml:"auth,omitempty"`
 }
 
 // Clone returns a deep copy, used to snapshot a request before sending so

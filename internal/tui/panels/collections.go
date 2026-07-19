@@ -21,6 +21,16 @@ type RequestSelectedMsg struct {
 	Request    *core.Request
 }
 
+// RenameRequestedMsg is emitted when the user confirms an inline rename; the
+// root model performs the storage operation and reloads the tree.
+type RenameRequestedMsg struct {
+	Collection string
+	Path       []string
+	// Request is nil when a folder or collection is being renamed.
+	Request *core.Request
+	NewName string
+}
+
 type nodeKind int
 
 const (
@@ -64,19 +74,24 @@ type Collections struct {
 
 	searching   bool
 	searchInput textinput.Model
+
+	renaming    bool
+	renameInput textinput.Model
 }
 
 // NewCollections builds the collections panel in its loading state.
 func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
 	search := textinput.New()
 	search.Prompt = "/"
-	return Collections{theme: t, keys: keys, loading: true, searchInput: search}
+	rename := textinput.New()
+	rename.Prompt = "rename: "
+	return Collections{theme: t, keys: keys, loading: true, searchInput: search, renameInput: rename}
 }
 
-// Searching reports whether the search input captures keystrokes; the root
-// model must not treat keys as global shortcuts while true.
-func (m *Collections) Searching() bool {
-	return m.searching
+// Capturing reports whether an inline input (search or rename) captures
+// keystrokes; the root model must not treat keys as global shortcuts then.
+func (m *Collections) Capturing() bool {
+	return m.searching || m.renaming
 }
 
 // SetWorkspace replaces the tree content after the workspace load finishes.
@@ -90,6 +105,8 @@ func (m *Collections) SetWorkspace(collections []*core.Collection, hasWorkspace 
 	m.refreshVisible()
 }
 
+// buildNodes expands collections but keeps folders collapsed, so a fresh
+// tree starts compact.
 func buildNodes(collections []*core.Collection) []*node {
 	var roots []*node
 	for _, c := range collections {
@@ -107,7 +124,7 @@ func buildFolderChildren(folders []*core.Folder, requests []*core.Request, paren
 			kind:       nodeFolder,
 			name:       f.Name,
 			depth:      parent.depth + 1,
-			expanded:   true,
+			expanded:   false,
 			parent:     parent,
 			collection: parent.collection,
 			path:       append(append([]string{}, path...), f.Name),
@@ -170,14 +187,18 @@ func (m *Collections) SetFocused(focused bool) {
 			m.cursor = 0
 			m.refreshVisible()
 		}
+		if m.renaming {
+			m.renaming = false
+			m.renameInput.Blur()
+		}
 	}
 }
 
 // rowCount is the number of tree rows that fit inside the frame; the search
-// line takes one row while active.
+// or rename line takes one row while active.
 func (m Collections) rowCount() int {
 	rows := m.height - 3
-	if m.searching {
+	if m.searching || m.renaming {
 		rows--
 	}
 	return max(rows, 1)
@@ -205,6 +226,9 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 
 	if m.searching {
 		return m.updateSearch(keyMsg)
+	}
+	if m.renaming {
+		return m.updateRename(keyMsg)
 	}
 	if len(m.visible) == 0 && len(m.roots) == 0 {
 		return m, nil
@@ -246,10 +270,51 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	case key.Matches(keyMsg, m.keys.Top):
 		m.pendingG = true
 
+	case key.Matches(keyMsg, m.keys.Rename):
+		if m.cursor < len(m.visible) {
+			m.renaming = true
+			m.renameInput.SetValue(m.visible[m.cursor].name)
+			m.renameInput.CursorEnd()
+			return m, m.renameInput.Focus()
+		}
+
 	case key.Matches(keyMsg, m.keys.Select):
 		return m.openCurrent()
 	}
 	return m, nil
+}
+
+// updateRename drives the inline rename input.
+func (m Collections) updateRename(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.renaming = false
+		m.renameInput.Blur()
+		return m, nil
+
+	case msg.Code == tea.KeyEnter:
+		m.renaming = false
+		m.renameInput.Blur()
+		newName := strings.TrimSpace(m.renameInput.Value())
+		if m.cursor >= len(m.visible) || newName == "" {
+			return m, nil
+		}
+		n := m.visible[m.cursor]
+		if newName == n.name {
+			return m, nil
+		}
+		rename := RenameRequestedMsg{
+			Collection: n.collection,
+			Path:       n.path,
+			Request:    n.request,
+			NewName:    newName,
+		}
+		return m, func() tea.Msg { return rename }
+	}
+
+	var cmd tea.Cmd
+	m.renameInput, cmd = m.renameInput.Update(msg)
+	return m, cmd
 }
 
 // updateSearch drives the filter input: live filtering while typing, enter
@@ -392,6 +457,9 @@ func (m Collections) body() string {
 	if m.searching {
 		fmt.Fprintf(&b, " %s %s\n", m.searchInput.View(),
 			m.theme.Muted.Render(fmt.Sprintf("%d", len(m.visible))))
+	}
+	if m.renaming {
+		fmt.Fprintf(&b, " %s\n", m.renameInput.View())
 	}
 
 	rows := m.rowCount()

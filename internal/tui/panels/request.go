@@ -1,6 +1,8 @@
 package panels
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -140,11 +142,28 @@ func (m *Request) SetFocused(focused bool) {
 	}
 }
 
+// EditBodyRequestedMsg asks the root model to open the body in $EDITOR via
+// tea.ExecProcess.
+type EditBodyRequestedMsg struct {
+	Content  string
+	BodyType string
+}
+
+// SetBodyContent replaces the body after an external editor session.
+func (m *Request) SetBodyContent(content string) {
+	if m.req != nil {
+		m.req.Body.Content = content
+		if m.req.Body.Type == "" && content != "" {
+			m.req.Body.Type = "json"
+		}
+	}
+}
+
 // rows returns the number of selectable rows on the current tab.
 func (m *Request) rows() int {
 	switch m.tab {
 	case tabURL:
-		return 2 // method, url
+		return 3 // method, url, description
 	case tabParams:
 		return len(m.req.Params)
 	case tabHeaders:
@@ -203,10 +222,34 @@ func (m Request) Update(msg tea.Msg) (Request, tea.Cmd) {
 	case key.Matches(keyMsg, m.keys.DeleteRow) && (m.tab == tabParams || m.tab == tabHeaders):
 		m.deleteRow()
 
+	case key.Matches(keyMsg, m.keys.Format) && m.tab == tabBody:
+		return m.formatBody()
+
+	case key.Matches(keyMsg, m.keys.Edit) && m.tab == tabBody:
+		msg := EditBodyRequestedMsg{Content: m.req.Body.Content, BodyType: m.req.Body.Type}
+		return m, func() tea.Msg { return msg }
+
 	case key.Matches(keyMsg, m.keys.Select), key.Matches(keyMsg, m.keys.Insert):
 		return m.activateRow()
 	}
 	return m, nil
+}
+
+// formatBody pretty-prints the body when it is valid JSON.
+func (m Request) formatBody() (Request, tea.Cmd) {
+	trimmed := strings.TrimSpace(m.req.Body.Content)
+	if trimmed == "" {
+		return m, noteCmd("body is empty — nothing to format", true)
+	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, []byte(trimmed), "", "  "); err != nil {
+		return m, noteCmd("body is not valid JSON: "+err.Error(), true)
+	}
+	m.req.Body.Content = pretty.String()
+	if m.req.Body.Type == "" {
+		m.req.Body.Type = "json"
+	}
+	return m, noteCmd("body formatted", false)
 }
 
 func (m Request) addRow() (Request, tea.Cmd) {
@@ -249,7 +292,11 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 			return m, nil
 		}
 		m.insert = true
-		m.urlInput.SetValue(m.req.URL)
+		if m.row == 2 {
+			m.urlInput.SetValue(m.req.Description)
+		} else {
+			m.urlInput.SetValue(m.req.URL)
+		}
 		m.urlInput.CursorEnd()
 		m.refreshSuggestions()
 		return m, m.urlInput.Focus()
@@ -425,7 +472,11 @@ func (m Request) suggestionLine() string {
 func (m *Request) commitInsert() {
 	switch m.tab {
 	case tabURL:
-		m.req.URL = strings.TrimSpace(m.urlInput.Value())
+		if m.row == 2 {
+			m.req.Description = strings.TrimSpace(m.urlInput.Value())
+		} else {
+			m.req.URL = strings.TrimSpace(m.urlInput.Value())
+		}
 	case tabParams, tabHeaders:
 		kvs := m.currentKVs()
 		if m.row < len(*kvs) {
@@ -559,12 +610,24 @@ func (m Request) renderField(b *strings.Builder, row int, label, value string) {
 
 func (m Request) renderURLTab(b *strings.Builder) {
 	m.renderField(b, 0, "method", m.req.Method)
-	if m.insert {
+
+	if m.insert && m.row == 1 {
 		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("url    "), m.urlInput.View())
 		m.renderSuggestions(b)
-		return
+	} else {
+		m.renderField(b, 1, "url", m.req.URL)
 	}
-	m.renderField(b, 1, "url", m.req.URL)
+
+	desc := m.req.Description
+	if desc == "" {
+		desc = m.theme.Muted.Render("(none)")
+	}
+	if m.insert && m.row == 2 {
+		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("desc   "), m.urlInput.View())
+		m.renderSuggestions(b)
+	} else {
+		m.renderField(b, 2, "desc", desc)
+	}
 }
 
 func (m Request) renderSuggestions(b *strings.Builder) {

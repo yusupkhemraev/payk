@@ -1,0 +1,38 @@
+version: 2
+
+project_name: payk
+
+builds:
+  - main: ./cmd/payk
+    binary: payk
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+brews:
+  - repository:
+      owner: yusupkhemraev
+      name: homebrew-tap
+    homepage: https://github.com/yusupkhemraev/payk
+    description: Keyboard-first TUI HTTP client
+    skip_upload: true # flip when the tap repo exists

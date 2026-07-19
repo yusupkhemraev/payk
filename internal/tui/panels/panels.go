@@ -6,10 +6,21 @@ package panels
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/yusupkhemraev/payk/internal/tui/theme"
 )
+
+// StatusNote asks the root model to flash a transient status message.
+type StatusNote struct {
+	Text  string
+	IsErr bool
+}
+
+func noteCmd(text string, isErr bool) tea.Cmd {
+	return func() tea.Msg { return StatusNote{Text: text, IsErr: isErr} }
+}
 
 // frame renders a bordered panel box of exactly width x height with a title
 // row and body content, clipping overflow so resizing never breaks rendering.
