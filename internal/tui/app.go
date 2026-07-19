@@ -83,6 +83,7 @@ type Model struct {
 	cmdline     cmdLine
 	statusMsg   string
 	statusIsErr bool
+	helpScroll  int
 	// messages keeps recent status texts in full; the m overlay shows them
 	// since the status bar truncates.
 	messages     []statusEntry
@@ -459,10 +460,21 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.showHelp {
 		switch {
+		case key.Matches(msg, m.keys.Down):
+			m.helpScroll++
+		case key.Matches(msg, m.keys.Up):
+			m.helpScroll--
 		case key.Matches(msg, m.keys.Help),
 			key.Matches(msg, m.keys.Escape),
 			key.Matches(msg, m.keys.Quit):
 			m.showHelp = false
+			m.helpScroll = 0
+		}
+		if m.helpScroll < 0 {
+			m.helpScroll = 0
+		}
+		if rows, visible := m.helpRows(); m.helpScroll > len(rows)-visible {
+			m.helpScroll = max(len(rows)-visible, 0)
 		}
 		return m, nil
 	}
@@ -681,32 +693,77 @@ func (m Model) panesView() string {
 	}
 }
 
-func (m Model) helpView() string {
-	var columns []string
+// helpAvail returns the inner space of the help overlay box: the terminal
+// minus status bar, box border, padding, title, and footer rows.
+func (m Model) helpAvail() (width, height int) {
+	return max(m.width-10, 20), max(m.height-statusBarHeight-8, 3)
+}
+
+// helpRows lays the enabled bindings out in as many aligned columns as the
+// terminal width allows, filling column-major. It returns the row lines and
+// how many of them fit on screen at once.
+func (m Model) helpRows() ([]string, int) {
+	var rendered []string
+	entryWidth := 0
 	for _, group := range m.keys.FullHelp() {
-		var lines []string
 		for _, binding := range group {
 			if !binding.Enabled() {
 				continue
 			}
-			lines = append(lines,
-				m.theme.HelpKey.Render(padRight(binding.Help().Key, 10))+
-					m.theme.HelpDesc.Render(binding.Help().Desc))
-		}
-		if len(lines) > 0 {
-			columns = append(columns, strings.Join(lines, "\n"))
+			entry := m.theme.HelpKey.Render(padRight(binding.Help().Key, 10)) +
+				m.theme.HelpDesc.Render(binding.Help().Desc)
+			rendered = append(rendered, entry)
+			entryWidth = max(entryWidth, lipgloss.Width(entry))
 		}
 	}
 
-	title := m.theme.HelpTitle.Render("payk — keybindings")
+	availWidth, availHeight := m.helpAvail()
+	const gap = 3
+	maxCols := max((availWidth+gap)/(entryWidth+gap), 1)
+
+	// Start compact and add columns until the list fits the height (or the
+	// width runs out); leftover rows scroll.
+	cols := min(maxCols, 2)
+	rows := (len(rendered) + cols - 1) / cols
+	for rows > availHeight && cols < maxCols {
+		cols++
+		rows = (len(rendered) + cols - 1) / cols
+	}
+
+	// Fill column-major, padding every cell to entryWidth so columns align.
+	lines := make([]string, rows)
+	for col := 0; col < cols; col++ {
+		for row := 0; row < rows; row++ {
+			idx := col*rows + row
+			if idx >= len(rendered) {
+				continue
+			}
+			cell := rendered[idx]
+			if col < cols-1 {
+				cell += strings.Repeat(" ", entryWidth-lipgloss.Width(cell)+gap)
+			}
+			lines[row] += cell
+		}
+	}
+	return lines, availHeight
+}
+
+func (m Model) helpView() string {
+	rows, visible := m.helpRows()
 	area := m.height - statusBarHeight
 
-	box := m.theme.HelpBox.Render(
-		title + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, joinWithGap(columns, 4)...))
-	// Narrow terminals get the columns stacked vertically instead.
-	if lipgloss.Width(box) > m.width {
-		box = m.theme.HelpBox.Render(title + "\n" + strings.Join(columns, "\n\n"))
+	scroll := min(max(m.helpScroll, 0), max(len(rows)-visible, 0))
+	shown := rows[scroll:min(scroll+visible, len(rows))]
+
+	footer := ""
+	if len(rows) > visible {
+		footer = "\n\n" + m.theme.Muted.Render(fmt.Sprintf(
+			"j/k scroll · %d–%d/%d", scroll+1, scroll+len(shown), len(rows)))
 	}
+
+	box := m.theme.HelpBox.Render(
+		m.theme.HelpTitle.Render("payk — keybindings") + "\n" +
+			strings.Join(shown, "\n") + footer)
 	box = clampBlock(box, m.width, area)
 
 	return lipgloss.Place(m.width, area, lipgloss.Center, lipgloss.Center, box)
@@ -809,16 +866,4 @@ func padRight(s string, width int) string {
 		return s + " "
 	}
 	return s + strings.Repeat(" ", width-len(s))
-}
-
-func joinWithGap(columns []string, gap int) []string {
-	spacer := strings.Repeat(" ", gap)
-	out := make([]string, 0, len(columns)*2)
-	for i, c := range columns {
-		if i > 0 {
-			out = append(out, spacer)
-		}
-		out = append(out, c)
-	}
-	return out
 }
