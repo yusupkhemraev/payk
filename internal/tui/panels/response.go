@@ -10,6 +10,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/alecthomas/chroma/v2/quick"
@@ -52,12 +53,30 @@ type Response struct {
 	err      error
 	vp       viewport.Model
 	pendingG bool
+
+	searching   bool
+	searchInput textinput.Model
+	query       string
+	// plainLines is the un-highlighted body used for matching; rendered
+	// lines carry ANSI colors and line up with it 1:1.
+	plainLines    []string
+	renderedLines []string
+	matches       []int
+	matchIdx      int
 }
 
 // NewResponse builds the response viewer panel.
 func NewResponse(t *theme.Theme, keys keymap.KeyMap) Response {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
-	return Response{theme: t, keys: keys, spin: sp, vp: viewport.New()}
+	search := textinput.New()
+	search.Prompt = "/"
+	return Response{theme: t, keys: keys, spin: sp, vp: viewport.New(), searchInput: search}
+}
+
+// Searching reports whether the search input captures keystrokes; the root
+// model must not treat keys as global shortcuts while true.
+func (m *Response) Searching() bool {
+	return m.searching
 }
 
 // StartSending switches to the in-flight state and starts the spinner.
@@ -73,10 +92,75 @@ func (m *Response) SetResponse(resp *httpc.Response, err error) {
 	m.resp = resp
 	m.err = err
 	m.tab = respBody
+	m.closeSearch()
+	m.query = ""
+	m.matches = nil
 	if resp != nil {
-		m.vp.SetContent(m.renderBody(resp))
+		plain := m.plainBody(resp)
+		m.plainLines = strings.Split(plain, "\n")
+		m.renderedLines = strings.Split(m.highlightBody(resp, plain), "\n")
+		m.syncViewport()
 		m.vp.GotoTop()
 	}
+}
+
+func (m *Response) closeSearch() {
+	m.searching = false
+	m.searchInput.Blur()
+	m.syncViewportHeight()
+}
+
+// searchBarVisible reports whether a search line occupies a viewport row.
+func (m *Response) searchBarVisible() bool {
+	return m.searching || (m.query != "" && len(m.matches) > 0)
+}
+
+func (m *Response) syncViewportHeight() {
+	// Frame (3) + tab bar (2) + status line (2) rows around the viewport.
+	height := m.height - 7
+	if m.searchBarVisible() {
+		height--
+	}
+	m.vp.SetHeight(max(height, 1))
+}
+
+// syncViewport rebuilds the viewport content, highlighting the current
+// search match line.
+func (m *Response) syncViewport() {
+	m.syncViewportHeight()
+	if len(m.matches) == 0 || m.query == "" {
+		m.vp.SetContentLines(m.renderedLines)
+		return
+	}
+	lines := append([]string(nil), m.renderedLines...)
+	current := m.matches[m.matchIdx]
+	if current < len(lines) {
+		lines[current] = m.theme.Selected.Render(m.plainLines[current])
+	}
+	m.vp.SetContentLines(lines)
+}
+
+func (m *Response) computeMatches() {
+	m.matches = m.matches[:0]
+	m.matchIdx = 0
+	query := strings.ToLower(m.query)
+	if query == "" {
+		return
+	}
+	for i, line := range m.plainLines {
+		if strings.Contains(strings.ToLower(line), query) {
+			m.matches = append(m.matches, i)
+		}
+	}
+}
+
+// jumpToMatch scrolls the current match into view with a little context.
+func (m *Response) jumpToMatch() {
+	m.syncViewport()
+	if len(m.matches) == 0 {
+		return
+	}
+	m.vp.SetYOffset(max(m.matches[m.matchIdx]-2, 0))
 }
 
 // SetSize sets the outer box size, borders included.
@@ -84,8 +168,7 @@ func (m *Response) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.vp.SetWidth(max(width-4, 10))
-	// Frame (3) + tab bar (2) + status line (2) rows around the viewport.
-	m.vp.SetHeight(max(height-7, 1))
+	m.syncViewportHeight()
 }
 
 // SetFocused toggles keyboard focus for this panel.
@@ -114,6 +197,10 @@ func (m Response) Update(msg tea.Msg) (Response, tea.Cmd) {
 }
 
 func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
+	if m.searching {
+		return m.updateSearch(msg)
+	}
+
 	if m.pendingG {
 		m.pendingG = false
 		if msg.String() == "g" {
@@ -123,6 +210,20 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(msg, m.keys.Search):
+		if m.resp != nil && m.tab == respBody {
+			m.searching = true
+			m.searchInput.SetValue(m.query)
+			m.searchInput.CursorEnd()
+			m.syncViewportHeight()
+			return m, m.searchInput.Focus()
+		}
+
+	case key.Matches(msg, m.keys.SearchNext):
+		m.cycleMatch(1)
+	case key.Matches(msg, m.keys.SearchPrev):
+		m.cycleMatch(-1)
+
 	case key.Matches(msg, m.keys.TabNext):
 		m.tab = respTab((int(m.tab) + 1) % len(respTabNames))
 	case key.Matches(msg, m.keys.TabPrev):
@@ -141,6 +242,39 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 		m.pendingG = true
 	}
 	return m, nil
+}
+
+// updateSearch drives the "/" input: live matching while typing, enter keeps
+// the query for n/N, esc clears it.
+func (m Response) updateSearch(msg tea.KeyPressMsg) (Response, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.query = ""
+		m.matches = nil
+		m.closeSearch()
+		m.syncViewport()
+		return m, nil
+
+	case msg.Code == tea.KeyEnter:
+		m.closeSearch()
+		m.syncViewport()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	m.query = m.searchInput.Value()
+	m.computeMatches()
+	m.jumpToMatch()
+	return m, cmd
+}
+
+func (m *Response) cycleMatch(delta int) {
+	if len(m.matches) == 0 {
+		return
+	}
+	m.matchIdx = (m.matchIdx + delta + len(m.matches)) % len(m.matches)
+	m.jumpToMatch()
 }
 
 // View renders the panel at its current size.
@@ -170,12 +304,31 @@ func (m Response) renderResponse(b *strings.Builder) {
 
 	switch m.tab {
 	case respBody:
+		if line := m.searchLine(); line != "" {
+			fmt.Fprintf(b, "%s\n", line)
+		}
 		b.WriteString(m.vp.View())
 	case respHeaders:
 		m.renderHeaders(b)
 	case respTimings:
 		m.renderTimings(b)
 	}
+}
+
+// searchLine renders the "/" input or the committed query with match count.
+func (m Response) searchLine() string {
+	switch {
+	case m.searching:
+		count := ""
+		if m.query != "" {
+			count = m.theme.Muted.Render(fmt.Sprintf("  %d matches", len(m.matches)))
+		}
+		return " " + m.searchInput.View() + count
+	case m.query != "" && len(m.matches) > 0:
+		return " " + m.theme.Muted.Render(fmt.Sprintf("/%s  %d/%d  n/N to cycle",
+			m.query, m.matchIdx+1, len(m.matches)))
+	}
+	return ""
 }
 
 func (m Response) statusLine() string {
@@ -201,30 +354,36 @@ func (m Response) tabBar() string {
 	return " " + strings.Join(parts, m.theme.TabInactive.Render(" · "))
 }
 
-// renderBody pretty-prints and highlights the body, capped by size so large
-// responses never block the UI.
-func (m Response) renderBody(resp *httpc.Response) string {
+// plainBody pretty-prints the body without styling; search matches against
+// these lines.
+func (m Response) plainBody(resp *httpc.Response) string {
 	body := resp.Body
 	if len(body) == 0 {
-		return m.theme.Muted.Render("(empty body)")
+		return "(empty body)"
 	}
-
-	isJSON := looksLikeJSON(resp)
-	if isJSON && len(body) <= prettyLimit {
+	if looksLikeJSON(resp) && len(body) <= prettyLimit {
 		var pretty bytes.Buffer
 		if err := json.Indent(&pretty, bytes.TrimSpace(body), "", "  "); err == nil {
-			body = pretty.Bytes()
-		}
-	}
-
-	if isJSON && len(body) <= highlightLimit {
-		var highlighted bytes.Buffer
-		err := quick.Highlight(&highlighted, string(body), "json", "terminal16m", m.theme.ChromaStyle())
-		if err == nil {
-			return highlighted.String()
+			return pretty.String()
 		}
 	}
 	return string(body)
+}
+
+// highlightBody colors the plain body, capped by size so large responses
+// never block the UI. Line structure must stay identical to plainBody.
+func (m Response) highlightBody(resp *httpc.Response, plain string) string {
+	if len(resp.Body) == 0 {
+		return m.theme.Muted.Render("(empty body)")
+	}
+	if looksLikeJSON(resp) && len(plain) <= highlightLimit {
+		var highlighted bytes.Buffer
+		err := quick.Highlight(&highlighted, plain, "json", "terminal16m", m.theme.ChromaStyle())
+		if err == nil {
+			return strings.TrimSuffix(highlighted.String(), "\n")
+		}
+	}
+	return plain
 }
 
 func looksLikeJSON(resp *httpc.Response) bool {

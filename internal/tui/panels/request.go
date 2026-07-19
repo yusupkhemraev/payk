@@ -56,6 +56,11 @@ type Request struct {
 	kvField   int
 	bodyArea  textarea.Model
 	authInput textinput.Model
+
+	// envVars/osEnv feed {{var}} completion in insert mode.
+	envVars []string
+	osEnv   []string
+	suggest *suggestState
 }
 
 // NewRequest builds the request editor panel.
@@ -93,6 +98,14 @@ func (m *Request) SetRequest(req *core.Request) {
 	m.tab = tabURL
 	m.row = 0
 	m.insert = false
+	m.suggest = nil
+}
+
+// SetEnvironment provides variable names for {{var}} completion: vars from
+// the active environment and names from the process environment.
+func (m *Request) SetEnvironment(envVars, osEnv []string) {
+	m.envVars = envVars
+	m.osEnv = osEnv
 }
 
 // CurrentRequest returns the request loaded in the editor, or nil.
@@ -238,6 +251,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 		m.insert = true
 		m.urlInput.SetValue(m.req.URL)
 		m.urlInput.CursorEnd()
+		m.refreshSuggestions()
 		return m, m.urlInput.Focus()
 
 	case tabParams, tabHeaders:
@@ -264,6 +278,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 		m.insert = true
 		m.authInput.SetValue(m.authValue())
 		m.authInput.CursorEnd()
+		m.refreshSuggestions()
 		return m, m.authInput.Focus()
 	}
 	return m, nil
@@ -281,6 +296,7 @@ func (m Request) startKVInsert() (Request, tea.Cmd) {
 	m.kvValue.SetValue(kvs[m.row].Value)
 	m.kvValue.CursorEnd()
 	m.kvValue.Blur()
+	m.refreshSuggestions()
 	return m, m.kvName.Focus()
 }
 
@@ -291,16 +307,29 @@ func (m Request) updateInsert(msg tea.Msg) (Request, tea.Cmd) {
 			m.commitInsert()
 			return m, nil
 
+		// With an open {{ completion, tab accepts and ctrl+n/p cycle.
+		case m.suggest.active() && keyMsg.Code == tea.KeyTab && keyMsg.Mod == 0:
+			m.acceptSuggestion()
+			return m, nil
+		case m.suggest.active() && (keyMsg.String() == "ctrl+n" || keyMsg.Code == tea.KeyDown):
+			m.suggest.move(1)
+			return m, nil
+		case m.suggest.active() && (keyMsg.String() == "ctrl+p" || keyMsg.Code == tea.KeyUp):
+			m.suggest.move(-1)
+			return m, nil
+
 		case (m.tab == tabParams || m.tab == tabHeaders) &&
 			(key.Matches(keyMsg, m.keys.NextPane) || key.Matches(keyMsg, m.keys.PrevPane)):
 			// tab/shift+tab jump between the name and value inputs.
 			if m.kvField == 0 {
 				m.kvField = 1
 				m.kvName.Blur()
+				m.refreshSuggestions()
 				return m, m.kvValue.Focus()
 			}
 			m.kvField = 0
 			m.kvValue.Blur()
+			m.refreshSuggestions()
 			return m, m.kvName.Focus()
 
 		case m.tab != tabBody && keyMsg.Code == tea.KeyEnter:
@@ -324,7 +353,71 @@ func (m Request) updateInsert(msg tea.Msg) (Request, tea.Cmd) {
 	case tabAuth:
 		m.authInput, cmd = m.authInput.Update(msg)
 	}
+	m.refreshSuggestions()
 	return m, cmd
+}
+
+// activeInput returns the focused textinput of the current insert session,
+// or nil for the body textarea (no completion there).
+func (m *Request) activeInput() *textinput.Model {
+	switch m.tab {
+	case tabURL:
+		return &m.urlInput
+	case tabParams, tabHeaders:
+		if m.kvField == 0 {
+			return &m.kvName
+		}
+		return &m.kvValue
+	case tabAuth:
+		return &m.authInput
+	}
+	return nil
+}
+
+func (m *Request) refreshSuggestions() {
+	input := m.activeInput()
+	if input == nil {
+		m.suggest = nil
+		return
+	}
+	prev := m.suggest
+	m.suggest = varSuggestions(input.Value(), input.Position(), m.envVars, m.osEnv)
+	// Keep the highlighted entry stable while the match list is unchanged.
+	if prev != nil && m.suggest != nil && prev.index < len(m.suggest.matches) &&
+		len(prev.matches) == len(m.suggest.matches) {
+		m.suggest.index = prev.index
+	}
+}
+
+func (m *Request) acceptSuggestion() {
+	input := m.activeInput()
+	if input == nil || !m.suggest.active() {
+		return
+	}
+	value, cursor := m.suggest.apply(input.Value(), input.Position())
+	input.SetValue(value)
+	input.SetCursor(cursor)
+	m.refreshSuggestions()
+}
+
+// suggestionLine renders the completion candidates under the active input.
+func (m Request) suggestionLine() string {
+	if !m.suggest.active() {
+		return ""
+	}
+	var parts []string
+	for i, name := range m.suggest.matches {
+		label := "{{" + name + "}}"
+		if name == "env:" {
+			label = "{{env:…}}"
+		}
+		if i == m.suggest.index {
+			parts = append(parts, m.theme.Selected.Render(label))
+		} else {
+			parts = append(parts, m.theme.Muted.Render(label))
+		}
+	}
+	return " " + m.theme.FieldLabel.Render("↹") + " " + strings.Join(parts, " ")
 }
 
 // commitInsert writes the active input back into the request and leaves
@@ -359,6 +452,7 @@ func (m *Request) commitInsert() {
 	}
 
 	m.insert = false
+	m.suggest = nil
 	m.urlInput.Blur()
 	m.kvName.Blur()
 	m.kvValue.Blur()
@@ -429,10 +523,13 @@ func (m Request) body() string {
 
 func (m Request) hint() string {
 	if m.insert {
-		if m.tab == tabParams || m.tab == tabHeaders {
-			return "tab name/value · esc done"
+		if m.suggest.active() {
+			return "tab complete · ctrl+n/p cycle · esc done"
 		}
-		return "esc done"
+		if m.tab == tabParams || m.tab == tabHeaders {
+			return "tab name/value · {{ vars · esc done"
+		}
+		return "{{ vars · esc done"
 	}
 	return "[ ] tabs · i edit · space send"
 }
@@ -464,9 +561,16 @@ func (m Request) renderURLTab(b *strings.Builder) {
 	m.renderField(b, 0, "method", m.req.Method)
 	if m.insert {
 		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("url    "), m.urlInput.View())
+		m.renderSuggestions(b)
 		return
 	}
 	m.renderField(b, 1, "url", m.req.URL)
+}
+
+func (m Request) renderSuggestions(b *strings.Builder) {
+	if line := m.suggestionLine(); line != "" {
+		fmt.Fprintf(b, "%s\n", line)
+	}
 }
 
 func (m Request) renderKVTab(b *strings.Builder, kvs []core.KV, emptyHint string) {
@@ -477,6 +581,7 @@ func (m Request) renderKVTab(b *strings.Builder, kvs []core.KV, emptyHint string
 	for i, kv := range kvs {
 		if m.insert && i == m.row {
 			fmt.Fprintf(b, " %s = %s\n", m.kvName.View(), m.kvValue.View())
+			m.renderSuggestions(b)
 			continue
 		}
 		selected := m.focused && !m.insert && m.row == i
@@ -520,17 +625,20 @@ func (m Request) renderAuthTab(b *strings.Builder) {
 	case core.AuthBearer:
 		if m.insert {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("token  "), m.authInput.View())
+			m.renderSuggestions(b)
 		} else {
 			m.renderField(b, 1, "token", m.req.Auth.Token)
 		}
 	case core.AuthBasic:
 		if m.insert && m.row == 1 {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("user   "), m.authInput.View())
+			m.renderSuggestions(b)
 		} else {
 			m.renderField(b, 1, "user", m.req.Auth.User)
 		}
 		if m.insert && m.row == 2 {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("pass   "), m.authInput.View())
+			m.renderSuggestions(b)
 		} else {
 			m.renderField(b, 2, "pass", strings.Repeat("•", len(m.req.Auth.Pass)))
 		}

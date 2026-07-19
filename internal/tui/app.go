@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -128,6 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workspace = msg.workspace
 		m.envs = msg.environments
 		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
+		m.syncEditorEnvironment()
 		return m, nil
 
 	case panels.RequestSelectedMsg:
@@ -264,11 +266,37 @@ func (m Model) switchEnvironment(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.envs.Active = name
+	m.syncEditorEnvironment()
 	m.setStatus("environment: "+name, false)
 	if m.workspace == nil {
 		return m, nil
 	}
 	return m, saveEnvironmentsCmd(m.workspace, m.envs)
+}
+
+// syncEditorEnvironment feeds current variable names into the editor's
+// {{var}} completion.
+func (m *Model) syncEditorEnvironment() {
+	vars := m.activeVars()
+	names := make([]string, 0, len(vars))
+	for name := range vars {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	m.request.SetEnvironment(names, osEnvNames())
+}
+
+// osEnvNames returns sorted process environment variable names.
+func osEnvNames() []string {
+	environ := os.Environ()
+	names := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		if name, _, found := strings.Cut(kv, "="); found {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (m *Model) setStatus(msg string, isErr bool) {
@@ -334,9 +362,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleCmdlineKey(msg)
 	}
 
-	// Insert mode captures everything except ctrl+c, so typed text never
-	// triggers global shortcuts.
-	if m.focus == paneRequest && m.request.Editing() {
+	// Insert mode and pane-local search inputs capture everything except
+	// ctrl+c, so typed text never triggers global shortcuts.
+	captured := (m.focus == paneRequest && m.request.Editing()) ||
+		(m.focus == paneCollections && m.collections.Searching()) ||
+		(m.focus == paneResponse && m.response.Searching())
+	if captured {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}

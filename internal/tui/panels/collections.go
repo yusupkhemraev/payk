@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/yusupkhemraev/payk/internal/core"
@@ -34,6 +35,7 @@ type node struct {
 	name     string
 	depth    int
 	expanded bool
+	parent   *node
 	children []*node
 
 	request    *core.Request
@@ -59,11 +61,22 @@ type Collections struct {
 	cursor   int
 	scroll   int
 	pendingG bool
+
+	searching   bool
+	searchInput textinput.Model
 }
 
 // NewCollections builds the collections panel in its loading state.
 func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
-	return Collections{theme: t, keys: keys, loading: true}
+	search := textinput.New()
+	search.Prompt = "/"
+	return Collections{theme: t, keys: keys, loading: true, searchInput: search}
+}
+
+// Searching reports whether the search input captures keystrokes; the root
+// model must not treat keys as global shortcuts while true.
+func (m *Collections) Searching() bool {
+	return m.searching
 }
 
 // SetWorkspace replaces the tree content after the workspace load finishes.
@@ -95,6 +108,7 @@ func buildFolderChildren(folders []*core.Folder, requests []*core.Request, paren
 			name:       f.Name,
 			depth:      parent.depth + 1,
 			expanded:   true,
+			parent:     parent,
 			collection: parent.collection,
 			path:       append(append([]string{}, path...), f.Name),
 		}
@@ -106,6 +120,7 @@ func buildFolderChildren(folders []*core.Folder, requests []*core.Request, paren
 			kind:       nodeRequest,
 			name:       r.Name,
 			depth:      parent.depth + 1,
+			parent:     parent,
 			request:    r,
 			collection: parent.collection,
 			path:       path,
@@ -149,12 +164,23 @@ func (m *Collections) SetFocused(focused bool) {
 	m.focused = focused
 	if !focused {
 		m.pendingG = false
+		if m.searching {
+			m.searching = false
+			m.searchInput.Blur()
+			m.cursor = 0
+			m.refreshVisible()
+		}
 	}
 }
 
-// rowCount is the number of tree rows that fit inside the frame.
+// rowCount is the number of tree rows that fit inside the frame; the search
+// line takes one row while active.
 func (m Collections) rowCount() int {
-	return max(m.height-3, 1)
+	rows := m.height - 3
+	if m.searching {
+		rows--
+	}
+	return max(rows, 1)
 }
 
 func (m *Collections) ensureCursorVisible() {
@@ -173,7 +199,14 @@ func (m *Collections) ensureCursorVisible() {
 // Update handles navigation keys while the panel is focused.
 func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyPressMsg)
-	if !ok || len(m.visible) == 0 {
+	if !ok {
+		return m, nil
+	}
+
+	if m.searching {
+		return m.updateSearch(keyMsg)
+	}
+	if len(m.visible) == 0 && len(m.roots) == 0 {
 		return m, nil
 	}
 
@@ -188,6 +221,12 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(keyMsg, m.keys.Search):
+		m.searching = true
+		m.searchInput.SetValue("")
+		m.applyFilter()
+		return m, m.searchInput.Focus()
+
 	case key.Matches(keyMsg, m.keys.Down):
 		if m.cursor < len(m.visible)-1 {
 			m.cursor++
@@ -211,6 +250,114 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 		return m.openCurrent()
 	}
 	return m, nil
+}
+
+// updateSearch drives the filter input: live filtering while typing, enter
+// jumps to the selected match, esc restores the full tree.
+func (m Collections) updateSearch(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.searching = false
+		m.searchInput.Blur()
+		m.cursor = 0
+		m.refreshVisible()
+		return m, nil
+
+	case msg.Code == tea.KeyEnter:
+		var target *node
+		if m.cursor < len(m.visible) {
+			target = m.visible[m.cursor]
+		}
+		m.searching = false
+		m.searchInput.Blur()
+		m.jumpTo(target)
+		return m, nil
+
+	case msg.Code == tea.KeyDown || msg.String() == "ctrl+n":
+		if m.cursor < len(m.visible)-1 {
+			m.cursor++
+		}
+		m.ensureCursorVisible()
+		return m, nil
+
+	case msg.Code == tea.KeyUp || msg.String() == "ctrl+p":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		m.ensureCursorVisible()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	m.applyFilter()
+	return m, cmd
+}
+
+// applyFilter replaces the visible rows with nodes matching the query.
+func (m *Collections) applyFilter() {
+	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
+	if query == "" {
+		m.refreshVisible()
+		return
+	}
+
+	m.visible = m.visible[:0]
+	var walk func(n *node)
+	walk = func(n *node) {
+		if n.matches(query) {
+			m.visible = append(m.visible, n)
+		}
+		for _, child := range n.children {
+			walk(child)
+		}
+	}
+	for _, root := range m.roots {
+		walk(root)
+	}
+	m.cursor = 0
+	m.scroll = 0
+}
+
+// matches checks the query against name, method, URL, and tree path.
+func (n *node) matches(query string) bool {
+	if strings.Contains(strings.ToLower(n.name), query) {
+		return true
+	}
+	if n.request != nil {
+		if strings.Contains(strings.ToLower(n.request.Method), query) ||
+			strings.Contains(strings.ToLower(n.request.URL), query) {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToLower(n.pathLabel()), query)
+}
+
+// pathLabel renders the node's location like "api/users".
+func (n *node) pathLabel() string {
+	parts := append([]string{n.collection}, n.path...)
+	return strings.Join(parts, "/")
+}
+
+// jumpTo restores the full tree with target selected, expanding its
+// ancestors so it is visible.
+func (m *Collections) jumpTo(target *node) {
+	if target != nil {
+		for p := target.parent; p != nil; p = p.parent {
+			p.expanded = true
+		}
+	}
+	m.refreshVisible()
+	if target == nil {
+		return
+	}
+	for i, n := range m.visible {
+		if n == target {
+			m.cursor = i
+			break
+		}
+	}
+	m.ensureCursorVisible()
 }
 
 func (m Collections) openCurrent() (Collections, tea.Cmd) {
@@ -237,38 +384,56 @@ func (m Collections) body() string {
 		return m.theme.Muted.Render(" error: " + m.loadErr.Error())
 	case !m.hasWorkspace:
 		return m.theme.Muted.Render(" no workspace found\n\n create .payk/collections/\n in your project")
-	case len(m.visible) == 0:
+	case len(m.visible) == 0 && !m.searching:
 		return m.theme.Muted.Render(" workspace is empty\n\n add YAML files under\n .payk/collections/")
+	}
+
+	var b strings.Builder
+	if m.searching {
+		fmt.Fprintf(&b, " %s %s\n", m.searchInput.View(),
+			m.theme.Muted.Render(fmt.Sprintf("%d", len(m.visible))))
 	}
 
 	rows := m.rowCount()
 	end := min(m.scroll+rows, len(m.visible))
-
-	var b strings.Builder
 	for i := m.scroll; i < end; i++ {
 		if i > m.scroll {
 			b.WriteString("\n")
 		}
 		b.WriteString(m.renderRow(m.visible[i], i == m.cursor && m.focused))
 	}
+	if m.searching && len(m.visible) == 0 {
+		b.WriteString(m.theme.Muted.Render(" no matches"))
+	}
 	return b.String()
 }
 
 func (m Collections) renderRow(n *node, selected bool) string {
 	indent := strings.Repeat("  ", n.depth)
+	// Search results render flat, with the tree path as context instead of
+	// indentation.
+	var context string
+	if m.searching {
+		indent = ""
+		context = "  " + n.pathLabel()
+	}
 
 	// The selected row gets a single background style; nested foreground
 	// styles would reset it mid-row, so it is built from plain text.
 	if selected {
-		return m.theme.Selected.Render(" " + indent + n.plainLabel() + " ")
+		return m.theme.Selected.Render(" " + indent + n.plainLabel() + context + " ")
 	}
 
+	styledContext := ""
+	if context != "" {
+		styledContext = m.theme.Muted.Render(context)
+	}
 	switch n.kind {
 	case nodeRequest:
 		badge := m.theme.Method(n.request.Method).Render(fmt.Sprintf("%-6s", n.request.Method))
-		return " " + indent + badge + " " + n.name
+		return " " + indent + badge + " " + n.name + styledContext
 	default:
-		return " " + m.theme.Muted.Render(indent+n.arrow()) + " " + n.name
+		return " " + m.theme.Muted.Render(indent+n.arrow()) + " " + n.name + styledContext
 	}
 }
 
