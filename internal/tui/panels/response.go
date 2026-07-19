@@ -157,8 +157,8 @@ func (m *Response) searchBarVisible() bool {
 }
 
 func (m *Response) syncViewportHeight() {
-	// Frame (3) + tab bar (2) + status line (2) rows around the viewport.
-	height := m.height - 7
+	// Frame with title and separator (4) + tab bar (2) + status line (2).
+	height := m.height - 8
 	if m.tab == respBody && m.searchBarVisible() {
 		height--
 	}

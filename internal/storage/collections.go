@@ -136,6 +136,25 @@ func (w *Workspace) RenameFolder(collection string, folders []string, newName st
 	return nil
 }
 
+// DeleteRequest removes a request file.
+func (w *Workspace) DeleteRequest(collection string, folders []string, req *core.Request) error {
+	path := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...), slug(req.Name)+".yaml")
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("storage: delete request: %w", err)
+	}
+	return nil
+}
+
+// DeleteFolder removes a folder directory recursively. An empty path deletes
+// the whole collection.
+func (w *Workspace) DeleteFolder(collection string, folders []string) error {
+	dir := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("storage: delete folder: %w", err)
+	}
+	return nil
+}
+
 func marshalYAML(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

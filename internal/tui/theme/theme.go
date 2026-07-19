@@ -46,6 +46,11 @@ type Theme struct {
 	TabInactive lipgloss.Style
 	FieldLabel  lipgloss.Style
 
+	TreeCollection lipgloss.Style
+	TreeFolder     lipgloss.Style
+	TreeCount      lipgloss.Style
+	Separator      lipgloss.Style
+
 	statusOK       lipgloss.Style
 	statusRedirect lipgloss.Style
 	statusClient   lipgloss.Style
@@ -125,6 +130,13 @@ func New(flavor catppuccin.Flavor) *Theme {
 		Underline(true)
 	t.TabInactive = lipgloss.NewStyle().Foreground(flavor.Overlay1())
 	t.FieldLabel = lipgloss.NewStyle().Foreground(flavor.Subtext0())
+
+	t.TreeCollection = lipgloss.NewStyle().
+		Foreground(flavor.Sapphire()).
+		Bold(true)
+	t.TreeFolder = lipgloss.NewStyle().Foreground(flavor.Text())
+	t.TreeCount = lipgloss.NewStyle().Foreground(flavor.Overlay0())
+	t.Separator = lipgloss.NewStyle().Foreground(flavor.Surface1())
 
 	t.statusOK = lipgloss.NewStyle().Foreground(flavor.Green()).Bold(true)
 	t.statusRedirect = lipgloss.NewStyle().Foreground(flavor.Yellow()).Bold(true)

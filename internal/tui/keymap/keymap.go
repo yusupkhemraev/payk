@@ -36,14 +36,15 @@ type KeyMap struct {
 	AddRow    key.Binding
 	DeleteRow key.Binding
 
-	Send   key.Binding
-	Edit   key.Binding
-	Wrap   key.Binding
-	Zoom   key.Binding
-	Rename key.Binding
-	Raw    key.Binding
-	Format key.Binding
-	Yank   key.Binding
+	Send     key.Binding
+	Edit     key.Binding
+	Wrap     key.Binding
+	Zoom     key.Binding
+	Rename   key.Binding
+	Raw      key.Binding
+	Format   key.Binding
+	Yank     key.Binding
+	Messages key.Binding
 }
 
 // Default returns the standard vim-style key map.
@@ -182,6 +183,10 @@ func Default() KeyMap {
 			key.WithKeys("y"),
 			key.WithHelp("y", "copy response body"),
 		),
+		Messages: key.NewBinding(
+			key.WithKeys("m"),
+			key.WithHelp("m", "message log"),
+		),
 	}
 }
 
@@ -198,6 +203,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Top, k.Bottom, k.HalfDown, k.HalfUp, k.Select},
 		{k.Search, k.SearchNext, k.SearchPrev, k.TabNext, k.TabPrev, k.Wrap},
 		{k.Insert, k.AddRow, k.DeleteRow, k.Rename, k.Format, k.Edit},
-		{k.Send, k.Yank, k.Raw, k.Command, k.Help, k.Quit},
+		{k.Send, k.Yank, k.Raw, k.Messages, k.Command, k.Help, k.Quit},
 	}
 }

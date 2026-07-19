@@ -17,8 +17,8 @@ const (
 	tripleBreakpoint = 120
 	doubleBreakpoint = 80
 
-	sidebarMinWidth = 20
-	sidebarMaxWidth = 34
+	sidebarMinWidth = 24
+	sidebarMaxWidth = 42
 
 	statusBarHeight = 1
 )
@@ -50,7 +50,7 @@ func layout(width, height int, sidebarVisible bool) PanelSizes {
 
 	switch {
 	case width >= tripleBreakpoint:
-		sidebar := clamp(width/5, sidebarMinWidth, sidebarMaxWidth)
+		sidebar := clamp(width/4, sidebarMinWidth, sidebarMaxWidth)
 		request := (width - sidebar) / 2
 		response := width - sidebar - request
 		return PanelSizes{

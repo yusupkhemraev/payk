@@ -33,16 +33,17 @@ func frame(t *theme.Theme, title string, focused bool, width, height int, body s
 	innerHeight := height - 2
 
 	titleLine := ansi.Truncate(t.PanelTitle(focused).Render(title), innerWidth, "…")
+	separator := t.Separator.Render(strings.Repeat("─", innerWidth))
 
 	bodyLines := strings.Split(body, "\n")
-	if len(bodyLines) > innerHeight-1 {
-		bodyLines = bodyLines[:innerHeight-1]
+	if len(bodyLines) > innerHeight-2 {
+		bodyLines = bodyLines[:max(innerHeight-2, 0)]
 	}
 	for i, line := range bodyLines {
 		bodyLines[i] = ansi.Truncate(line, innerWidth, "…")
 	}
 
-	content := titleLine
+	content := titleLine + "\n" + separator
 	if len(bodyLines) > 0 {
 		content += "\n" + strings.Join(bodyLines, "\n")
 	}

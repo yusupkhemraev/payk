@@ -52,7 +52,7 @@ func TestHeadersTabScrolls(t *testing.T) {
 	if strings.Contains(view, "X-Header-39 ") {
 		t.Fatal("last header should be below the fold before scrolling")
 	}
-	if !strings.Contains(view, "1–") || !strings.Contains(view, "%)") {
+	if !strings.Contains(view, "1–") || !strings.Contains(view, "/43") {
 		t.Errorf("scroll indicator missing:\n%s", view)
 	}
 
@@ -68,6 +68,12 @@ func TestHeadersTabScrolls(t *testing.T) {
 	}
 }
 
+// collapseView strips layout noise so text split across wrapped lines can be
+// matched as one string.
+func collapseView(view string) string {
+	return strings.NewReplacer("\n", "", "│", "", " ", "").Replace(view)
+}
+
 func TestBodyWrapToggle(t *testing.T) {
 	// A long line with a unique tail marker far past the pane width.
 	long := strings.Repeat("x", 280) + "TAIL-MARKER-END"
@@ -76,23 +82,23 @@ func TestBodyWrapToggle(t *testing.T) {
 	})
 
 	// Without wrap the viewport clips the line: its tail is not visible.
-	view := plainView(m)
-	if strings.Contains(view, "TAIL-MARKER-END") {
-		t.Fatalf("long line tail should be clipped without wrap:\n%s", view)
+	if strings.Contains(collapseView(plainView(m)), "TAIL-MARKER-END") {
+		t.Fatalf("long line tail should be clipped without wrap:\n%s", plainView(m))
 	}
 
 	m = typeString(m, "w")
-	view = plainView(m)
+	view := plainView(m)
 	if !strings.Contains(view, "wrap") {
 		t.Errorf("wrap state missing from indicator:\n%s", view)
 	}
-	// The tail of the long line is now visible on a following line.
-	if !strings.Contains(view, "TAIL-MARKER-END") {
+	// The tail of the long line is now visible on the wrapped lines (the
+	// marker may be split across a line break).
+	if !strings.Contains(collapseView(view), "TAIL-MARKER-END") {
 		t.Errorf("wrapped tail not visible:\n%s", view)
 	}
 
 	m = typeString(m, "w")
-	if strings.Contains(plainView(m), "TAIL-MARKER-END") {
+	if strings.Contains(collapseView(plainView(m)), "TAIL-MARKER-END") {
 		t.Error("second w should disable wrapping")
 	}
 }

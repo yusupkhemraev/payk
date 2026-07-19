@@ -77,7 +77,9 @@ memory at send time — secrets are never written to disk.
 | `enter` | open request · toggle folder · cycle enum field |
 | `i` | edit field (insert mode), `esc` back to normal |
 | `a` / `d` | add / delete param or header row |
+| `d` | delete request/folder/collection in tree (with confirm) |
 | `r` | rename in tree · raw/pretty body in response |
+| `m` | message log (full text of truncated status messages) |
 | `f` | format JSON body |
 | `e` | edit body in `$EDITOR` |
 | `space` | send request (`esc` cancels) |

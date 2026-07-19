@@ -83,6 +83,10 @@ type Model struct {
 	cmdline     cmdLine
 	statusMsg   string
 	statusIsErr bool
+	// messages keeps recent status texts in full; the m overlay shows them
+	// since the status bar truncates.
+	messages     []statusEntry
+	showMessages bool
 
 	importers []importer.Importer
 	// pendingImport holds pasted text awaiting the y/n import prompt;
@@ -163,6 +167,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, renameCmd(m.workspace, m.cfg, msg)
 
+	case panels.DeleteRequestedMsg:
+		if m.workspace == nil {
+			m.setStatus("no workspace to delete from", true)
+			return m, nil
+		}
+		return m, deleteCmd(m.workspace, m.cfg, msg)
+
 	case panels.EditBodyRequestedMsg:
 		return m, openEditorCmd(msg)
 
@@ -203,9 +214,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.envs = msg.environments
 			m.syncEditorEnvironment()
 		}
+		// Each warning goes into the message log in full; the status bar
+		// only shows the count.
+		for _, warning := range msg.warnings {
+			m.logMessage(warning, true)
+		}
 		status := "imported " + msg.imported
 		if len(msg.warnings) > 0 {
-			status += fmt.Sprintf(" (%d warnings: %s)", len(msg.warnings), strings.Join(msg.warnings, "; "))
+			status += fmt.Sprintf(" · %d warnings — press m", len(msg.warnings))
 		}
 		m.setStatus(status, len(msg.warnings) > 0)
 		return m, nil
@@ -309,6 +325,10 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 		}
 		return m.switchEnvironment(fields[1])
 
+	case "messages", "msgs":
+		m.showMessages = true
+		return m, nil
+
 	case "import":
 		if len(fields) < 2 {
 			m.setStatus("usage: :import <file-or-url>", true)
@@ -377,9 +397,24 @@ func osEnvNames() []string {
 	return names
 }
 
+type statusEntry struct {
+	text  string
+	isErr bool
+}
+
+const maxMessages = 100
+
 func (m *Model) setStatus(msg string, isErr bool) {
 	m.statusMsg = msg
 	m.statusIsErr = isErr
+	m.logMessage(msg, isErr)
+}
+
+func (m *Model) logMessage(msg string, isErr bool) {
+	m.messages = append(m.messages, statusEntry{text: msg, isErr: isErr})
+	if len(m.messages) > maxMessages {
+		m.messages = m.messages[len(m.messages)-maxMessages:]
+	}
 }
 
 // activeVars returns the vars of the active environment, or nil.
@@ -432,6 +467,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.showMessages {
+		switch {
+		case key.Matches(msg, m.keys.Messages),
+			key.Matches(msg, m.keys.Escape),
+			key.Matches(msg, m.keys.Quit):
+			m.showMessages = false
+		}
+		return m, nil
+	}
+
 	if m.pendingImport != "" {
 		return m.handleImportPromptKey(msg)
 	}
@@ -470,6 +515,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Help):
 		m.showHelp = true
+		return m, nil
+
+	case key.Matches(msg, m.keys.Messages):
+		m.showMessages = true
 		return m, nil
 
 	case key.Matches(msg, m.keys.ToggleSidebar):
@@ -572,9 +621,12 @@ func (m *Model) applyLayout() {
 func (m Model) View() tea.View {
 	var content string
 	if m.width > 0 && m.height > 0 {
-		if m.showHelp {
+		switch {
+		case m.showHelp:
 			content = m.helpView()
-		} else {
+		case m.showMessages:
+			content = m.messagesView()
+		default:
 			content = m.panesView()
 		}
 		content = lipgloss.JoinVertical(lipgloss.Left, content, m.statusView())
@@ -657,6 +709,45 @@ func (m Model) helpView() string {
 	}
 	box = clampBlock(box, m.width, area)
 
+	return lipgloss.Place(m.width, area, lipgloss.Center, lipgloss.Center, box)
+}
+
+// messagesView renders the full-text message log, newest last, wrapped to
+// the terminal width — the place to read what the status bar truncated.
+func (m Model) messagesView() string {
+	area := m.height - statusBarHeight
+	innerWidth := max(m.width-8, 20)
+
+	var lines []string
+	if len(m.messages) == 0 {
+		lines = append(lines, m.theme.Muted.Render("no messages yet"))
+	}
+	for _, entry := range m.messages {
+		style := m.theme.HelpDesc
+		marker := m.theme.Muted.Render("· ")
+		if entry.isErr {
+			style = m.theme.HelpDesc.Foreground(m.theme.Flavor.Red())
+			marker = m.theme.Status(500).Render("✗ ")
+		}
+		wrapped := ansi.Hardwrap(style.Render(entry.text), innerWidth-2, true)
+		for i, line := range strings.Split(wrapped, "\n") {
+			if i == 0 {
+				lines = append(lines, marker+line)
+			} else {
+				lines = append(lines, "  "+line)
+			}
+		}
+	}
+	// Keep the newest messages when the log outgrows the overlay.
+	maxLines := max(area-6, 3)
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+
+	box := m.theme.HelpBox.Render(
+		m.theme.HelpTitle.Render("messages") + "\n" + strings.Join(lines, "\n") +
+			"\n\n" + m.theme.Muted.Render("m / esc to close"))
+	box = clampBlock(box, m.width, area)
 	return lipgloss.Place(m.width, area, lipgloss.Center, lipgloss.Center, box)
 }
 

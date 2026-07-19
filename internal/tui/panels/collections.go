@@ -31,6 +31,16 @@ type RenameRequestedMsg struct {
 	NewName string
 }
 
+// DeleteRequestedMsg is emitted when the user confirms deleting a tree node;
+// the root model removes it from disk and reloads the tree.
+type DeleteRequestedMsg struct {
+	Collection string
+	Path       []string
+	// Request is nil when a folder or collection is being deleted.
+	Request *core.Request
+	Label   string
+}
+
 type nodeKind int
 
 const (
@@ -77,6 +87,9 @@ type Collections struct {
 
 	renaming    bool
 	renameInput textinput.Model
+
+	// pendingDelete awaits y/n confirmation.
+	pendingDelete *node
 }
 
 // NewCollections builds the collections panel in its loading state.
@@ -88,10 +101,11 @@ func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
 	return Collections{theme: t, keys: keys, loading: true, searchInput: search, renameInput: rename}
 }
 
-// Capturing reports whether an inline input (search or rename) captures
-// keystrokes; the root model must not treat keys as global shortcuts then.
+// Capturing reports whether an inline input (search, rename, delete
+// confirmation) captures keystrokes; the root model must not treat keys as
+// global shortcuts then.
 func (m *Collections) Capturing() bool {
-	return m.searching || m.renaming
+	return m.searching || m.renaming || m.pendingDelete != nil
 }
 
 // SetWorkspace replaces the tree content after the workspace load finishes.
@@ -197,8 +211,8 @@ func (m *Collections) SetFocused(focused bool) {
 // rowCount is the number of tree rows that fit inside the frame; the search
 // or rename line takes one row while active.
 func (m Collections) rowCount() int {
-	rows := m.height - 3
-	if m.searching || m.renaming {
+	rows := m.height - 4
+	if m.searching || m.renaming || m.pendingDelete != nil {
 		rows--
 	}
 	return max(rows, 1)
@@ -229,6 +243,9 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	}
 	if m.renaming {
 		return m.updateRename(keyMsg)
+	}
+	if m.pendingDelete != nil {
+		return m.updateDeleteConfirm(keyMsg)
 	}
 	if len(m.visible) == 0 && len(m.roots) == 0 {
 		return m, nil
@@ -278,10 +295,31 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 			return m, m.renameInput.Focus()
 		}
 
+	case key.Matches(keyMsg, m.keys.DeleteRow):
+		if m.cursor < len(m.visible) {
+			m.pendingDelete = m.visible[m.cursor]
+		}
+
 	case key.Matches(keyMsg, m.keys.Select):
 		return m.openCurrent()
 	}
 	return m, nil
+}
+
+// updateDeleteConfirm answers the inline "delete?" prompt.
+func (m Collections) updateDeleteConfirm(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
+	n := m.pendingDelete
+	m.pendingDelete = nil
+	if msg.String() != "y" && msg.String() != "Y" {
+		return m, nil
+	}
+	del := DeleteRequestedMsg{
+		Collection: n.collection,
+		Path:       n.path,
+		Request:    n.request,
+		Label:      n.name,
+	}
+	return m, func() tea.Msg { return del }
 }
 
 // updateRename drives the inline rename input.
@@ -436,9 +474,33 @@ func (m Collections) openCurrent() (Collections, tea.Cmd) {
 	return m, nil
 }
 
+// requestCount counts requests in the subtree rooted at n.
+func (n *node) requestCount() int {
+	if n.kind == nodeRequest {
+		return 1
+	}
+	total := 0
+	for _, child := range n.children {
+		total += child.requestCount()
+	}
+	return total
+}
+
 // View renders the panel at its current size.
 func (m Collections) View() string {
-	return frame(m.theme, "Collections", m.focused, m.width, m.height, m.body())
+	title := "Collections"
+	if total := m.totalRequests(); total > 0 {
+		title += " " + m.theme.TreeCount.Render(fmt.Sprintf("· %d", total))
+	}
+	return frame(m.theme, title, m.focused, m.width, m.height, m.body())
+}
+
+func (m Collections) totalRequests() int {
+	total := 0
+	for _, root := range m.roots {
+		total += root.requestCount()
+	}
+	return total
 }
 
 func (m Collections) body() string {
@@ -460,6 +522,10 @@ func (m Collections) body() string {
 	}
 	if m.renaming {
 		fmt.Fprintf(&b, " %s\n", m.renameInput.View())
+	}
+	if m.pendingDelete != nil {
+		fmt.Fprintf(&b, " %s\n", m.theme.Status(400).Render(
+			fmt.Sprintf("delete %q? (y/n)", m.pendingDelete.name)))
 	}
 
 	rows := m.rowCount()
@@ -486,10 +552,15 @@ func (m Collections) renderRow(n *node, selected bool) string {
 		context = "  " + n.pathLabel()
 	}
 
-	// The selected row gets a single background style; nested foreground
-	// styles would reset it mid-row, so it is built from plain text.
+	// The selected row gets a single background style stretched across the
+	// panel; nested foreground styles would reset it mid-row, so it is
+	// built from plain text.
 	if selected {
-		return m.theme.Selected.Render(" " + indent + n.plainLabel() + context + " ")
+		label := " " + indent + n.plainLabel() + context
+		if pad := m.width - 2 - len([]rune(label)); pad > 0 {
+			label += strings.Repeat(" ", pad)
+		}
+		return m.theme.Selected.Render(label)
 	}
 
 	styledContext := ""
@@ -500,8 +571,14 @@ func (m Collections) renderRow(n *node, selected bool) string {
 	case nodeRequest:
 		badge := m.theme.Method(n.request.Method).Render(fmt.Sprintf("%-6s", n.request.Method))
 		return " " + indent + badge + " " + n.name + styledContext
+	case nodeCollection:
+		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
+		return " " + m.theme.Muted.Render(n.arrow()) + " " +
+			m.theme.TreeCollection.Render(n.name) + count + styledContext
 	default:
-		return " " + m.theme.Muted.Render(indent+n.arrow()) + " " + n.name + styledContext
+		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
+		return " " + m.theme.Muted.Render(indent+n.arrow()) + " " +
+			m.theme.TreeFolder.Render(n.name) + count + styledContext
 	}
 }
 
@@ -516,5 +593,5 @@ func (n *node) plainLabel() string {
 	if n.kind == nodeRequest {
 		return fmt.Sprintf("%-6s %s", n.request.Method, n.name)
 	}
-	return n.arrow() + " " + n.name
+	return fmt.Sprintf("%s %s · %d", n.arrow(), n.name, n.requestCount())
 }

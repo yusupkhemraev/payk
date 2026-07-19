@@ -131,7 +131,7 @@ func (m *Request) SetSize(width, height int) {
 	m.kvValue.SetWidth(max(inner/2, 8))
 	m.authInput.SetWidth(inner)
 	m.bodyArea.SetWidth(inner)
-	m.bodyArea.SetHeight(max(height-7, 3))
+	m.bodyArea.SetHeight(max(height-8, 3))
 }
 
 // SetFocused toggles keyboard focus for this panel.

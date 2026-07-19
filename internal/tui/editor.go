@@ -69,3 +69,19 @@ func renameCmd(ws *storage.Workspace, cfg Config, msg panels.RenameRequestedMsg)
 		return loadWorkspaceCmd(cfg)()
 	}
 }
+
+// deleteCmd removes a request file or folder directory and reloads.
+func deleteCmd(ws *storage.Workspace, cfg Config, msg panels.DeleteRequestedMsg) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if msg.Request != nil {
+			err = ws.DeleteRequest(msg.Collection, msg.Path, msg.Request)
+		} else {
+			err = ws.DeleteFolder(msg.Collection, msg.Path)
+		}
+		if err != nil {
+			return panels.StatusNote{Text: "delete failed: " + err.Error(), IsErr: true}
+		}
+		return loadWorkspaceCmd(cfg)()
+	}
+}
