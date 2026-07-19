@@ -1,0 +1,100 @@
+openapi: 3.1.0
+info:
+  title: Swagger Petstore
+  version: 1.0.0
+servers:
+  - url: https://petstore.example.com/v2
+  - url: https://staging.petstore.example.com/v2
+tags:
+  - name: pets
+  - name: store
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      summary: List pets
+      operationId: listPets
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
+            format: uuid
+    post:
+      tags: [pets]
+      summary: Create a pet
+      operationId: createPet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+  /pets/{petId}:
+    get:
+      tags: [pets]
+      summary: Get a pet by id
+      operationId: getPet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+    delete:
+      tags: [pets]
+      summary: Delete a pet
+      operationId: deletePet
+  /store/order:
+    post:
+      tags: [store]
+      summary: Place an order
+      operationId: placeOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                petId:
+                  type: integer
+                quantity:
+                  type: integer
+                  example: 2
+                shipDate:
+                  type: string
+                  format: date-time
+  /healthz:
+    get:
+      summary: Health check
+      operationId: healthz
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: doggie
+        status:
+          type: string
+          enum: [available, pending, sold]
+        tags:
+          type: array
+          items:
+            type: string
+        owner:
+          $ref: '#/components/schemas/Owner'
+    Owner:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        verified:
+          type: boolean

@@ -19,6 +19,7 @@ import (
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/importer"
 	"github.com/yusupkhemraev/payk/internal/importer/curl"
+	"github.com/yusupkhemraev/payk/internal/importer/openapi"
 	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
@@ -81,8 +82,10 @@ type Model struct {
 	statusIsErr bool
 
 	importers []importer.Importer
-	// pendingImport holds pasted text awaiting the y/n import prompt.
-	pendingImport string
+	// pendingImport holds pasted text awaiting the y/n import prompt;
+	// pendingImportKind names the importer that matched it.
+	pendingImport     string
+	pendingImportKind string
 
 	collections panels.Collections
 	request     panels.Request
@@ -102,7 +105,7 @@ func New(cfg Config) Model {
 		sidebarVisible: true,
 		envs:           &core.Environments{},
 		cmdline:        newCmdLine(),
-		importers:      []importer.Importer{curl.New()},
+		importers:      []importer.Importer{curl.New(), openapi.New()},
 		collections:    panels.NewCollections(t, keys),
 		request:        panels.NewRequest(t, keys),
 		response:       panels.NewResponse(t, keys),
@@ -147,12 +150,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.PasteMsg:
-		// Pasted curl commands offer an inline import prompt; anything else
-		// goes to the focused panel (e.g. an input in insert mode).
-		if !m.request.Editing() && !m.cmdline.active &&
-			importer.Find(m.importers, msg.Content) != nil {
-			m.pendingImport = msg.Content
-			return m, nil
+		// The open command line takes pastes (e.g. a spec URL for :import).
+		if m.cmdline.active {
+			return m, m.cmdline.update(msg)
+		}
+		// Pasted importable input (curl command, OpenAPI spec) offers an
+		// inline import prompt; anything else goes to the focused panel
+		// (e.g. an input in insert mode).
+		if !m.request.Editing() {
+			if imp := importer.Find(m.importers, msg.Content); imp != nil {
+				m.pendingImport = msg.Content
+				m.pendingImportKind = imp.Name()
+				return m, nil
+			}
 		}
 		return m.routeToFocused(msg)
 
@@ -163,6 +173,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.collections.SetWorkspace(msg.collections, true, nil)
+		if msg.environments != nil {
+			m.envs = msg.environments
+			m.syncEditorEnvironment()
+		}
 		status := "imported " + msg.imported
 		if len(msg.warnings) > 0 {
 			status += fmt.Sprintf(" (%d warnings: %s)", len(msg.warnings), strings.Join(msg.warnings, "; "))
@@ -199,12 +213,25 @@ func (m Model) handleImportPromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y", "enter":
 		m.pendingImport = ""
+		m.pendingImportKind = ""
 		return m, runImportCmd(m.importers, m.workspace, input)
 	case "n", "N", "esc", "q":
 		m.pendingImport = ""
+		m.pendingImportKind = ""
 		return m, nil
 	}
 	return m, nil
+}
+
+func pasteKindLabel(name string) string {
+	switch name {
+	case "curl":
+		return "a curl command"
+	case "openapi":
+		return "an OpenAPI spec"
+	default:
+		return "importable input"
+	}
 }
 
 // handleCmdlineKey drives the ":" command input while it is open.
@@ -253,6 +280,19 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.switchEnvironment(fields[1])
+
+	case "import":
+		if len(fields) < 2 {
+			m.setStatus("usage: :import <file-or-url>", true)
+			return m, nil
+		}
+		input := strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
+		if importer.Find(m.importers, input) == nil {
+			m.setStatus("no importer can handle: "+input, true)
+			return m, nil
+		}
+		m.setStatus("importing "+input+"…", false)
+		return m, runImportCmd(m.importers, m.workspace, input)
 
 	default:
 		m.setStatus("unknown command: "+fields[0], true)
@@ -577,7 +617,7 @@ func clampBlock(block string, width, height int) string {
 func (m Model) statusView() string {
 	if m.pendingImport != "" {
 		prompt := m.theme.StatusBadge.Render("import") + " " +
-			m.theme.StatusHint.Render("paste looks like a curl command — import as request? (y/n)")
+			m.theme.StatusHint.Render("paste looks like "+pasteKindLabel(m.pendingImportKind)+" — import as request? (y/n)")
 		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(prompt)
 	}
 	if m.cmdline.active {

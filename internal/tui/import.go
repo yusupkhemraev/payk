@@ -15,13 +15,15 @@ import (
 )
 
 // importFinishedMsg carries the outcome of an import: the reloaded tree plus
-// non-fatal warnings from the importer.
+// non-fatal warnings from the importer. environments is non-nil when the
+// import added or updated environments (e.g. OpenAPI server URLs).
 type importFinishedMsg struct {
-	workspace   *storage.Workspace
-	collections []*core.Collection
-	imported    string
-	warnings    []string
-	err         error
+	workspace    *storage.Workspace
+	collections  []*core.Collection
+	environments *core.Environments
+	imported     string
+	warnings     []string
+	err          error
 }
 
 // runImportCmd feeds the input through the first matching importer, saves
@@ -51,15 +53,50 @@ func runImportCmd(importers []importer.Importer, ws *storage.Workspace, input st
 			return importFinishedMsg{workspace: ws, err: err}
 		}
 
+		environments, err := mergeEnvironments(ws, importer.EnvironmentsOf(imp))
+		if err != nil {
+			return importFinishedMsg{workspace: ws, err: err}
+		}
+
 		collections, err := ws.LoadCollections()
 		return importFinishedMsg{
-			workspace:   ws,
-			collections: collections,
-			imported:    importedLabel(collection),
-			warnings:    importer.WarningsOf(imp),
-			err:         err,
+			workspace:    ws,
+			collections:  collections,
+			environments: environments,
+			imported:     importedLabel(collection),
+			warnings:     importer.WarningsOf(imp),
+			err:          err,
 		}
 	}
+}
+
+// mergeEnvironments upserts importer-provided environments (e.g. OpenAPI
+// servers) into the workspace config. Existing environments with the same
+// name only get their base_url updated, preserving user-defined vars.
+func mergeEnvironments(ws *storage.Workspace, imported []core.Environment) (*core.Environments, error) {
+	if len(imported) == 0 {
+		return nil, nil
+	}
+	envs, err := ws.LoadEnvironments()
+	if err != nil {
+		return nil, err
+	}
+	for _, env := range imported {
+		if existing := envs.Get(env.Name); existing != nil {
+			if existing.Vars == nil {
+				existing.Vars = map[string]string{}
+			}
+			for name, value := range env.Vars {
+				existing.Vars[name] = value
+			}
+			continue
+		}
+		envs.Environments = append(envs.Environments, env)
+	}
+	if err := ws.SaveEnvironments(envs); err != nil {
+		return nil, err
+	}
+	return envs, nil
 }
 
 // saveCollection persists every request of an imported collection, walking

@@ -35,6 +35,20 @@ func WarningsOf(imp Importer) []string {
 	return nil
 }
 
+// EnvironmentProvider is optionally implemented by importers that derive
+// environments from the source (e.g. OpenAPI server URLs).
+type EnvironmentProvider interface {
+	Environments() []core.Environment
+}
+
+// EnvironmentsOf returns environments produced by the last Import, if any.
+func EnvironmentsOf(imp Importer) []core.Environment {
+	if p, ok := imp.(EnvironmentProvider); ok {
+		return p.Environments()
+	}
+	return nil
+}
+
 // Find returns the first registered importer that can handle the input.
 func Find(importers []Importer, input string) Importer {
 	for _, imp := range importers {

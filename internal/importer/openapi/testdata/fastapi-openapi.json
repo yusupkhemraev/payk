@@ -1,0 +1,61 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "FastAPI", "version": "0.1.0"},
+  "paths": {
+    "/users/": {
+      "get": {
+        "summary": "Read Users",
+        "operationId": "read_users_users__get",
+        "parameters": [
+          {"name": "skip", "in": "query", "required": false, "schema": {"type": "integer", "default": 0, "title": "Skip"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "default": 100, "title": "Limit"}}
+        ],
+        "responses": {"200": {"description": "Successful Response"}}
+      },
+      "post": {
+        "summary": "Create User",
+        "operationId": "create_user_users__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/UserCreate"}
+            }
+          }
+        },
+        "responses": {"200": {"description": "Successful Response"}}
+      }
+    },
+    "/items/{item_id}": {
+      "get": {
+        "summary": "Read Item",
+        "operationId": "read_item_items__item_id__get",
+        "parameters": [
+          {"name": "item_id", "in": "path", "required": true, "schema": {"type": "integer", "title": "Item Id"}}
+        ],
+        "responses": {"200": {"description": "Successful Response"}}
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {"200": {"description": "Successful Response"}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UserCreate": {
+        "type": "object",
+        "title": "UserCreate",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {"type": "string", "format": "email", "title": "Email"},
+          "password": {"type": "string", "title": "Password"},
+          "age": {"anyOf": [{"type": "integer"}, {"type": "null"}], "title": "Age"}
+        }
+      }
+    }
+  }
+}
