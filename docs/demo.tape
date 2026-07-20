@@ -1,64 +1,74 @@
 # VHS tape for the payk demo GIF.
-# Render with: vhs docs/demo.tape  (https://github.com/charmbracelet/vhs)
+# Render: go build -o /tmp/payk-demo-bin ./cmd/payk, prepare a clean demo
+# workspace in /tmp/payk-demo (examples collection), then: vhs docs/demo.tape
 
 Output docs/demo.gif
 
-Set FontSize 16
-Set Width 1400
-Set Height 800
+Set FontSize 15
+Set Width 1480
+Set Height 780
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 60ms
+Set TypingSpeed 80ms
+Set Padding 12
 
 Hide
-Type "go run ./cmd/payk"
+Type "cd /tmp/payk-demo && clear && /tmp/payk-demo-bin"
 Enter
-Sleep 2s
+Sleep 1.5s
 Show
 
-# Browse the tree: expand a folder, open a request.
-Type "j"
-Sleep 500ms
+# Browse: expand the users folder, open a request.
+Sleep 1s
+Type "jj"
+Sleep 600ms
 Enter
 Sleep 800ms
-Type "j"
-Sleep 300ms
+Type "jjj"
+Sleep 600ms
 Enter
-Sleep 1s
+Sleep 1.2s
 
-# Send it and inspect the response.
+# Send it.
 Space
-Sleep 2s
+Sleep 2.5s
+
+# Inspect the response: headers, timings, history, back to body.
 Type "ll"
-Sleep 500ms
+Sleep 600ms
 Type "]"
-Sleep 1s
+Sleep 1.4s
 Type "]"
-Sleep 1.5s
+Sleep 1.6s
+Type "]"
+Sleep 1.2s
 Type "["
 Type "["
-Sleep 500ms
+Type "["
+Sleep 800ms
 
 # Search inside the body.
 Type "/"
 Sleep 300ms
 Type "name"
-Sleep 800ms
+Sleep 900ms
 Enter
-Sleep 800ms
+Sleep 700ms
 Type "n"
-Sleep 800ms
+Sleep 700ms
+Type "n"
+Sleep 900ms
 
 # Fullscreen the response, then back.
 Type "z"
-Sleep 1.5s
+Sleep 1.6s
 Type "z"
-Sleep 800ms
+Sleep 900ms
 
 # Help overlay.
 Type "?"
-Sleep 2.5s
+Sleep 2.2s
 Escape
-Sleep 500ms
+Sleep 600ms
 
 Type "q"
-Sleep 1s
+Sleep 800ms

@@ -34,6 +34,10 @@ binary, no runtime dependencies.
 
 See **[docs/usage.md](docs/usage.md)** for the full guide.
 
+## Demo
+
+![payk demo](docs/demo.gif)
+
 ## Install
 
 Homebrew (macOS):
