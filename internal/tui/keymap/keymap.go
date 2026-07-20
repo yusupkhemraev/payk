@@ -154,7 +154,7 @@ func Default() KeyMap {
 		),
 		AddRow: key.NewBinding(
 			key.WithKeys("a"),
-			key.WithHelp("a", "add row"),
+			key.WithHelp("a", "add row / new request (tree)"),
 		),
 		DeleteRow: key.NewBinding(
 			key.WithKeys("d"),

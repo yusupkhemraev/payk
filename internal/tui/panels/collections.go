@@ -2,6 +2,7 @@ package panels
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -39,6 +40,14 @@ type DeleteRequestedMsg struct {
 	// Request is nil when a folder or collection is being deleted.
 	Request *core.Request
 	Label   string
+}
+
+// CreateRequestedMsg asks the root model to create a new request in the
+// given collection/folder and open it in the editor.
+type CreateRequestedMsg struct {
+	Collection string
+	Path       []string
+	Name       string
 }
 
 type nodeKind int
@@ -88,6 +97,9 @@ type Collections struct {
 	renaming    bool
 	renameInput textinput.Model
 
+	adding   bool
+	addInput textinput.Model
+
 	// pendingDelete awaits y/n confirmation.
 	pendingDelete *node
 }
@@ -98,14 +110,19 @@ func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
 	search.Prompt = "/"
 	rename := textinput.New()
 	rename.Prompt = "rename: "
-	return Collections{theme: t, keys: keys, loading: true, searchInput: search, renameInput: rename}
+	add := textinput.New()
+	add.Prompt = "new request: "
+	return Collections{
+		theme: t, keys: keys, loading: true,
+		searchInput: search, renameInput: rename, addInput: add,
+	}
 }
 
-// Capturing reports whether an inline input (search, rename, delete
+// Capturing reports whether an inline input (search, rename, add, delete
 // confirmation) captures keystrokes; the root model must not treat keys as
 // global shortcuts then.
 func (m *Collections) Capturing() bool {
-	return m.searching || m.renaming || m.pendingDelete != nil
+	return m.searching || m.renaming || m.adding || m.pendingDelete != nil
 }
 
 // SetWorkspace replaces the tree content after the workspace load finishes.
@@ -205,6 +222,10 @@ func (m *Collections) SetFocused(focused bool) {
 			m.renaming = false
 			m.renameInput.Blur()
 		}
+		if m.adding {
+			m.adding = false
+			m.addInput.Blur()
+		}
 	}
 }
 
@@ -212,7 +233,7 @@ func (m *Collections) SetFocused(focused bool) {
 // or rename line takes one row while active.
 func (m Collections) rowCount() int {
 	rows := m.height - 4
-	if m.searching || m.renaming || m.pendingDelete != nil {
+	if m.Capturing() {
 		rows--
 	}
 	return max(rows, 1)
@@ -244,8 +265,19 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	if m.renaming {
 		return m.updateRename(keyMsg)
 	}
+	if m.adding {
+		return m.updateAdd(keyMsg)
+	}
 	if m.pendingDelete != nil {
 		return m.updateDeleteConfirm(keyMsg)
+	}
+
+	// Adding works even in an empty workspace: the request lands in a
+	// default collection.
+	if key.Matches(keyMsg, m.keys.AddRow) && m.hasWorkspace {
+		m.adding = true
+		m.addInput.SetValue("")
+		return m, m.addInput.Focus()
 	}
 	if len(m.visible) == 0 && len(m.roots) == 0 {
 		return m, nil
@@ -304,6 +336,63 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 		return m.openCurrent()
 	}
 	return m, nil
+}
+
+// updateAdd drives the new-request input.
+func (m Collections) updateAdd(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.adding = false
+		m.addInput.Blur()
+		return m, nil
+
+	case msg.Code == tea.KeyEnter:
+		m.adding = false
+		m.addInput.Blur()
+		name := strings.TrimSpace(m.addInput.Value())
+		if name == "" {
+			return m, nil
+		}
+		create := CreateRequestedMsg{Collection: "api", Name: name}
+		if m.cursor < len(m.visible) {
+			n := m.visible[m.cursor]
+			create.Collection = n.collection
+			create.Path = n.path
+		}
+		return m, func() tea.Msg { return create }
+	}
+
+	var cmd tea.Cmd
+	m.addInput, cmd = m.addInput.Update(msg)
+	return m, cmd
+}
+
+// SelectRequest finds a request in the tree, reveals it, and returns it so
+// the root model can open it in the editor.
+func (m *Collections) SelectRequest(collection string, path []string, name string) *core.Request {
+	var target *node
+	var walk func(n *node)
+	walk = func(n *node) {
+		if target != nil {
+			return
+		}
+		if n.kind == nodeRequest && n.collection == collection &&
+			n.name == name && slices.Equal(n.path, path) {
+			target = n
+			return
+		}
+		for _, child := range n.children {
+			walk(child)
+		}
+	}
+	for _, root := range m.roots {
+		walk(root)
+	}
+	if target == nil {
+		return nil
+	}
+	m.jumpTo(target)
+	return target.request
 }
 
 // updateDeleteConfirm answers the inline "delete?" prompt.
@@ -522,6 +611,9 @@ func (m Collections) body() string {
 	}
 	if m.renaming {
 		fmt.Fprintf(&b, " %s\n", m.renameInput.View())
+	}
+	if m.adding {
+		fmt.Fprintf(&b, " %s\n", m.addInput.View())
 	}
 	if m.pendingDelete != nil {
 		fmt.Fprintf(&b, " %s\n", m.theme.Status(400).Render(

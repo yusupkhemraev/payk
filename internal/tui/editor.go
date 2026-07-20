@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
 )
@@ -67,6 +68,35 @@ func renameCmd(ws *storage.Workspace, cfg Config, msg panels.RenameRequestedMsg)
 			return panels.StatusNote{Text: "rename failed: " + err.Error(), IsErr: true}
 		}
 		return loadWorkspaceCmd(cfg)()
+	}
+}
+
+// requestCreatedMsg carries the reloaded workspace plus the location of the
+// just-created request so it can be opened in the editor.
+type requestCreatedMsg struct {
+	loaded     workspaceLoadedMsg
+	collection string
+	path       []string
+	name       string
+}
+
+// createRequestCmd writes a fresh GET request to disk and reloads the tree.
+func createRequestCmd(ws *storage.Workspace, cfg Config, msg panels.CreateRequestedMsg) tea.Cmd {
+	return func() tea.Msg {
+		req := &core.Request{Name: msg.Name, Method: "GET"}
+		if err := ws.SaveRequest(msg.Collection, msg.Path, req); err != nil {
+			return panels.StatusNote{Text: "create failed: " + err.Error(), IsErr: true}
+		}
+		loaded, ok := loadWorkspaceCmd(cfg)().(workspaceLoadedMsg)
+		if !ok {
+			return panels.StatusNote{Text: "create failed: workspace reload", IsErr: true}
+		}
+		return requestCreatedMsg{
+			loaded:     loaded,
+			collection: msg.Collection,
+			path:       msg.Path,
+			name:       msg.Name,
+		}
 	}
 }
 

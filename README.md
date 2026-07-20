@@ -98,7 +98,7 @@ auth:
 | `j` / `k`, `gg` / `G`, `ctrl+d` / `ctrl+u` | move / scroll |
 | `enter` | open request · toggle folder · cycle enum field · pick history entry |
 | `i` | edit field (insert mode), `esc` back to normal |
-| `a` | add param/header row (`enter` chains into the next row) |
+| `a` | add param/header row · new request in tree |
 | `d` | delete row in editor · delete tree node (with confirm) |
 | `r` | rename in tree · raw/pretty body in response |
 | `f` | format JSON body |

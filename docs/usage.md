@@ -45,6 +45,9 @@ environment, and transient messages. Long messages are truncated — press
 ## 3. The collections tree
 
 - `enter` on a folder toggles it; on a request, loads it into the editor.
+- `a` creates a new request in the selected collection or folder: type a
+  name, press `enter` — an empty GET opens in the editor, ready for a URL.
+  In an empty workspace the request lands in a new `api` collection.
 - Folders start collapsed; every node shows its request count.
 - `/` filters the tree live — by name, method, URL, and path. Matches show
   flat with their location; `enter` jumps to the match in the full tree,

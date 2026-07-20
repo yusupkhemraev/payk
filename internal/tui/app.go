@@ -176,6 +176,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, deleteCmd(m.workspace, m.cfg, msg)
 
+	case panels.CreateRequestedMsg:
+		ws := m.workspace
+		if ws == nil {
+			wd, err := os.Getwd()
+			if err != nil {
+				m.setStatus("create failed: "+err.Error(), true)
+				return m, nil
+			}
+			ws = &storage.Workspace{Dir: filepath.Join(wd, ".payk")}
+		}
+		return m, createRequestCmd(ws, m.cfg, msg)
+
+	case requestCreatedMsg:
+		m.workspace = msg.loaded.workspace
+		m.envs = msg.loaded.environments
+		m.collections.SetWorkspace(msg.loaded.collections, msg.loaded.workspace != nil, msg.loaded.err)
+		m.syncEditorEnvironment()
+		if req := m.collections.SelectRequest(msg.collection, msg.path, msg.name); req != nil {
+			m.request.SetRequest(req)
+			m.selCollection = msg.collection
+			m.selPath = msg.path
+			m.focus = paneRequest
+			m.lastMain = paneRequest
+			m.applyFocus()
+		}
+		m.setStatus("created "+msg.name+" — fill in the url and press space", false)
+		return m, nil
+
 	case panels.EditBodyRequestedMsg:
 		return m, openEditorCmd(msg)
 
