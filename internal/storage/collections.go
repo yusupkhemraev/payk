@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -173,12 +174,13 @@ func requestNameFromFile(path string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-// slug converts a request name to a safe, stable file name.
+// slug converts a request name to a safe, stable file name. Letters and
+// digits of any script are kept, so non-Latin names stay distinct.
 func slug(name string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
 			b.WriteRune(r)
 		case r == ' ':
 			b.WriteRune('-')

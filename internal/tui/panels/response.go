@@ -27,9 +27,21 @@ const (
 	respBody respTab = iota
 	respHeaders
 	respTimings
+	respHistory
 )
 
-var respTabNames = []string{"Body", "Headers", "Timings"}
+var respTabNames = []string{"Body", "Headers", "Timings", "History"}
+
+// maxHistory caps how many past responses are kept in memory.
+const maxHistory = 50
+
+// historyEntry is one completed send: the response or the error it ended in.
+type historyEntry struct {
+	label string
+	at    time.Time
+	resp  *httpc.Response
+	err   error
+}
 
 // highlightLimit caps syntax highlighting; larger bodies render as plain
 // text so the UI never freezes on huge responses.
@@ -74,6 +86,10 @@ type Response struct {
 	lineOffsets  []int
 	headersLines []string
 	timingsLines []string
+
+	history []historyEntry
+	// histCursor selects a row on the History tab, 0 = newest.
+	histCursor int
 }
 
 // NewResponse builds the response viewer panel.
@@ -97,8 +113,18 @@ func (m *Response) StartSending() tea.Cmd {
 	return m.spin.Tick
 }
 
-// SetResponse stores the send result and renders the body into the viewport.
-func (m *Response) SetResponse(resp *httpc.Response, err error) {
+// SetResponse records the send result in history and shows it.
+func (m *Response) SetResponse(label string, resp *httpc.Response, err error) {
+	m.history = append(m.history, historyEntry{label: label, at: time.Now(), resp: resp, err: err})
+	if len(m.history) > maxHistory {
+		m.history = m.history[len(m.history)-maxHistory:]
+	}
+	m.histCursor = 0
+	m.loadResponse(resp, err)
+}
+
+// loadResponse renders a response (current or from history) into the viewer.
+func (m *Response) loadResponse(resp *httpc.Response, err error) {
 	m.sending = false
 	m.resp = resp
 	m.err = err
@@ -174,8 +200,61 @@ func (m *Response) syncViewport() {
 		m.vp.SetContentLines(m.wrapLines(m.headersLines, nil))
 	case respTimings:
 		m.vp.SetContentLines(m.timingsLines)
+	case respHistory:
+		m.vp.SetContentLines(m.historyLines())
+		m.scrollHistoryCursorIntoView()
 	default:
 		m.vp.SetContentLines(m.bodyLines())
+	}
+}
+
+// historyAt maps a display row (0 = newest) to its entry.
+func (m *Response) historyAt(row int) historyEntry {
+	return m.history[len(m.history)-1-row]
+}
+
+func (m *Response) historyLines() []string {
+	if len(m.history) == 0 {
+		return []string{m.theme.Muted.Render(" no requests sent yet")}
+	}
+	lines := make([]string, len(m.history))
+	for row := range m.history {
+		entry := m.historyAt(row)
+
+		status := "error"
+		statusStyle := m.theme.Status(500)
+		meta := ""
+		if entry.err == nil && entry.resp != nil {
+			status = entry.resp.Status
+			statusStyle = m.theme.Status(entry.resp.StatusCode)
+			meta = fmt.Sprintf("  %s · %s",
+				formatSize(entry.resp.Size()), formatDuration(entry.resp.Timings.Total))
+		}
+
+		if row == m.histCursor && m.focused {
+			line := fmt.Sprintf(" %s  %-9s %s%s",
+				entry.at.Format("15:04:05"), status, entry.label, meta)
+			if pad := m.vp.Width() - len([]rune(line)); pad > 0 {
+				line += strings.Repeat(" ", pad)
+			}
+			lines[row] = m.theme.Selected.Render(line)
+			continue
+		}
+		lines[row] = fmt.Sprintf(" %s  %s %s%s",
+			m.theme.Muted.Render(entry.at.Format("15:04:05")),
+			statusStyle.Render(fmt.Sprintf("%-9s", status)),
+			entry.label,
+			m.theme.Muted.Render(meta))
+	}
+	return lines
+}
+
+func (m *Response) scrollHistoryCursorIntoView() {
+	height := m.vp.VisibleLineCount()
+	if m.histCursor < m.vp.YOffset() {
+		m.vp.SetYOffset(m.histCursor)
+	} else if m.histCursor >= m.vp.YOffset()+height {
+		m.vp.SetYOffset(m.histCursor - height + 1)
 	}
 }
 
@@ -327,6 +406,25 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 		m.setTab(respTab((int(m.tab) + 1) % len(respTabNames)))
 	case key.Matches(msg, m.keys.TabPrev):
 		m.setTab(respTab((int(m.tab) + len(respTabNames) - 1) % len(respTabNames)))
+
+	// The History tab moves a selection instead of scrolling; enter loads
+	// the selected past response back into the viewer.
+	case m.tab == respHistory && key.Matches(msg, m.keys.Down):
+		if m.histCursor < len(m.history)-1 {
+			m.histCursor++
+		}
+		m.syncViewport()
+	case m.tab == respHistory && key.Matches(msg, m.keys.Up):
+		if m.histCursor > 0 {
+			m.histCursor--
+		}
+		m.syncViewport()
+	case m.tab == respHistory && key.Matches(msg, m.keys.Select):
+		if len(m.history) > 0 {
+			entry := m.historyAt(m.histCursor)
+			m.loadResponse(entry.resp, entry.err)
+		}
+
 	case key.Matches(msg, m.keys.Down):
 		m.vp.ScrollDown(1)
 	case key.Matches(msg, m.keys.Up):
@@ -388,6 +486,11 @@ func (m Response) body() string {
 	switch {
 	case m.sending:
 		fmt.Fprintf(&b, " %s sending… %s", m.spin.View(), m.theme.Muted.Render("(esc to cancel)"))
+	case m.tab == respHistory:
+		b.WriteString(m.vp.View())
+		if len(m.history) > 0 {
+			fmt.Fprintf(&b, "\n %s", m.theme.Muted.Render("enter to open · j/k select"))
+		}
 	case m.err != nil:
 		m.renderError(&b)
 	case m.resp == nil:
@@ -478,6 +581,9 @@ func (m Response) tabBar() string {
 	for i, name := range respTabNames {
 		if respTab(i) == respHeaders && m.resp != nil {
 			name = fmt.Sprintf("%s (%d)", name, len(m.resp.Headers))
+		}
+		if respTab(i) == respHistory && len(m.history) > 0 {
+			name = fmt.Sprintf("%s (%d)", name, len(m.history))
 		}
 		style := m.theme.TabInactive
 		if respTab(i) == m.tab {

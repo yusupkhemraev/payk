@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/alecthomas/chroma/v2/quick"
 
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
@@ -682,9 +683,26 @@ func (m Request) renderBodyTab(b *strings.Builder) {
 		return
 	}
 	m.renderField(b, 1, "content", "")
-	for line := range strings.SplitSeq(m.req.Body.Content, "\n") {
+	for line := range strings.SplitSeq(m.bodyPreview(), "\n") {
 		fmt.Fprintf(b, "   %s\n", line)
 	}
+}
+
+// bodyPreview syntax-highlights JSON bodies in normal mode, capped by size
+// so huge bodies never block rendering.
+func (m Request) bodyPreview() string {
+	content := m.req.Body.Content
+	looksJSON := m.req.Body.Type == "json" ||
+		strings.HasPrefix(strings.TrimSpace(content), "{") ||
+		strings.HasPrefix(strings.TrimSpace(content), "[")
+	if !looksJSON || len(content) > highlightLimit {
+		return content
+	}
+	var highlighted bytes.Buffer
+	if err := quick.Highlight(&highlighted, content, "json", "terminal16m", m.theme.ChromaStyle()); err != nil {
+		return content
+	}
+	return strings.TrimSuffix(highlighted.String(), "\n")
 }
 
 func (m Request) renderAuthTab(b *strings.Builder) {

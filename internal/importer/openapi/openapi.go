@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pb33f/libopenapi"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
@@ -251,11 +252,13 @@ func serverEnvironments(name string, servers []*v3.Server) []core.Environment {
 }
 
 // slug makes a name safe to use as a directory or environment name.
+// Letters and digits of any script are kept, so tags like "Пользователи"
+// group into their own folders instead of collapsing.
 func slug(name string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
 			b.WriteRune(r)
 		case r == ' ':
 			b.WriteRune('-')

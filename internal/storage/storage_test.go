@@ -243,7 +243,8 @@ func TestSlug(t *testing.T) {
 		{"Create User", "create-user"},
 		{"  List  Users  ", "list--users"},
 		{"GET /users/{id}", "get-usersid"},
-		{"тест", "request"},
+		{"тест", "тест"},
+		{"Пользователи API", "пользователи-api"},
 		{"", "request"},
 	}
 	for _, tt := range tests {

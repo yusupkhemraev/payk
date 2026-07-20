@@ -219,3 +219,23 @@ func TestImportRejectsSwagger2(t *testing.T) {
 		t.Fatal("swagger 2.0 must be rejected")
 	}
 }
+
+func TestImportGroupsNonLatinTags(t *testing.T) {
+	spec := `{"openapi": "3.1.0", "info": {"title": "Пайдо API"}, "paths": {
+		"/users": {"get": {"summary": "Список пользователей", "tags": ["Пользователи"]}},
+		"/files": {"post": {"summary": "Загрузка файла", "tags": ["Файлы"]}}}}`
+
+	imp := New()
+	col, err := imp.Import(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if col.Name != "пайдо-api" {
+		t.Errorf("collection name = %q", col.Name)
+	}
+	folder(t, col, "пользователи")
+	folder(t, col, "файлы")
+	if len(col.Folders) != 2 {
+		t.Errorf("folders = %+v, want two distinct tag folders", col.Folders)
+	}
+}

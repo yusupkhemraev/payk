@@ -240,7 +240,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.logMessage(msg.err.Error(), true)
 		}
-		m.response.SetResponse(msg.resp, msg.err)
+		m.response.SetResponse(msg.label, msg.resp, msg.err)
 		return m, nil
 
 	case spinner.TickMsg:
@@ -449,14 +449,19 @@ func (m Model) startSend() (tea.Model, tea.Cmd) {
 		err := fmt.Errorf("undefined variables: %s (active environment: %s)",
 			strings.Join(missing, ", "), env)
 		m.logMessage(err.Error(), true)
-		m.response.SetResponse(nil, err)
+		m.response.SetResponse(requestLabel(req), nil, err)
 		return m, nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.sending = true
 	m.cancelSend = cancel
-	return m, tea.Batch(m.response.StartSending(), sendRequestCmd(ctx, resolved))
+	return m, tea.Batch(m.response.StartSending(),
+		sendRequestCmd(ctx, resolved, requestLabel(req)))
+}
+
+func requestLabel(req *core.Request) string {
+	return req.Method + " " + req.Name
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
