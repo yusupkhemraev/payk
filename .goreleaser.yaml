@@ -28,11 +28,3 @@ checksum:
 
 changelog:
   use: github-native
-
-brews:
-  - repository:
-      owner: yusupkhemraev
-      name: homebrew-tap
-    homepage: https://github.com/yusupkhemraev/payk
-    description: Keyboard-first TUI HTTP client
-    skip_upload: true # flip when the tap repo exists
