@@ -26,6 +26,10 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Replace existing assets so a re-run of a failed release job is idempotent.
+release:
+  mode: replace
+
 changelog:
   use: github-native
 
