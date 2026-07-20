@@ -237,6 +237,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case responseReceivedMsg:
 		m.sending = false
 		m.cancelSend = nil
+		if msg.err != nil {
+			m.logMessage(msg.err.Error(), true)
+		}
 		m.response.SetResponse(msg.resp, msg.err)
 		return m, nil
 
@@ -443,9 +446,10 @@ func (m Model) startSend() (tea.Model, tea.Cmd) {
 		if env == "" {
 			env = "none"
 		}
-		m.response.SetResponse(nil, fmt.Errorf(
-			"undefined variables: %s (active environment: %s)",
-			strings.Join(missing, ", "), env))
+		err := fmt.Errorf("undefined variables: %s (active environment: %s)",
+			strings.Join(missing, ", "), env)
+		m.logMessage(err.Error(), true)
+		m.response.SetResponse(nil, err)
 		return m, nil
 	}
 

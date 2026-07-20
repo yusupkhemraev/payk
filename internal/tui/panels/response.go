@@ -389,13 +389,27 @@ func (m Response) body() string {
 	case m.sending:
 		fmt.Fprintf(&b, " %s sending… %s", m.spin.View(), m.theme.Muted.Render("(esc to cancel)"))
 	case m.err != nil:
-		fmt.Fprintf(&b, " %s %s", m.theme.Status(500).Render("error"), m.err.Error())
+		m.renderError(&b)
 	case m.resp == nil:
 		fmt.Fprintf(&b, " %s", m.theme.Muted.Render("no response yet — press space to send"))
 	default:
 		m.renderResponse(&b)
 	}
 	return b.String()
+}
+
+// renderError word-wraps the error to the panel width, continuation lines
+// aligned under the text.
+func (m Response) renderError(b *strings.Builder) {
+	const prefix = " error "
+	limit := max(m.width-2-len(prefix), 16)
+	wrapped := strings.Split(ansi.Wrap(m.err.Error(), limit, ""), "\n")
+
+	fmt.Fprintf(b, " %s %s", m.theme.Status(500).Render("error"), wrapped[0])
+	indent := strings.Repeat(" ", len(prefix))
+	for _, line := range wrapped[1:] {
+		fmt.Fprintf(b, "\n%s%s", indent, line)
+	}
 }
 
 func (m Response) renderResponse(b *strings.Builder) {
