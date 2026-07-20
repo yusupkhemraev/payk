@@ -35,8 +35,7 @@ var bodyTypes = []string{"json", "text", "form"}
 var authTypes = []string{core.AuthNone, core.AuthBearer, core.AuthBasic}
 
 // Request is the center panel: a tabbed request editor with vim-style
-// normal/insert modes. Edits mutate the in-memory request; persisting to
-// disk arrives with the command line (:w) in a later milestone.
+// normal/insert modes. Edits mutate the in-memory request; :w persists.
 type Request struct {
 	theme *theme.Theme
 	keys  keymap.KeyMap
@@ -379,6 +378,17 @@ func (m Request) updateInsert(msg tea.Msg) (Request, tea.Cmd) {
 			m.refreshSuggestions()
 			return m, m.kvName.Focus()
 
+		// On KV tabs enter commits the row and chains into a fresh one, so
+		// several headers/params can be typed in a row; esc stops.
+		case (m.tab == tabParams || m.tab == tabHeaders) && keyMsg.Code == tea.KeyEnter:
+			m.commitInsert()
+			kvs := *m.currentKVs()
+			if m.row == len(kvs)-1 && m.row < len(kvs) &&
+				(kvs[m.row].Name != "" || kvs[m.row].Value != "") {
+				return m.addRow()
+			}
+			return m, nil
+
 		case m.tab != tabBody && keyMsg.Code == tea.KeyEnter:
 			m.commitInsert()
 			return m, nil
@@ -578,7 +588,7 @@ func (m Request) hint() string {
 			return "tab complete · ctrl+n/p cycle · esc done"
 		}
 		if m.tab == tabParams || m.tab == tabHeaders {
-			return "tab name/value · {{ vars · esc done"
+			return "tab name/value · enter next row · esc done"
 		}
 		return "{{ vars · esc done"
 	}

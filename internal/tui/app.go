@@ -70,6 +70,8 @@ type Model struct {
 	sidebarVisible bool
 	showHelp       bool
 	zoomed         bool
+	sidebarDelta   int
+	splitDelta     int
 
 	sending    bool
 	cancelSend context.CancelFunc
@@ -122,7 +124,6 @@ func New(cfg Config) Model {
 	return m
 }
 
-// Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return loadWorkspaceCmd(m.cfg)
 }
@@ -543,6 +544,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.applyLayout()
 		return m, nil
 
+	case key.Matches(msg, m.keys.GrowPane):
+		m.resizeFocused(2)
+		return m, nil
+
+	case key.Matches(msg, m.keys.ShrinkPane):
+		m.resizeFocused(-2)
+		return m, nil
+
 	case key.Matches(msg, m.keys.FocusLeft):
 		m.moveFocus(-1, false)
 		return m, nil
@@ -612,8 +621,26 @@ func (m *Model) applyFocus() {
 	m.response.SetFocused(m.focus == paneResponse)
 }
 
+// resizeFocused widens (+) or narrows (-) the focused pane by delta columns:
+// the collections sidebar has its own width, request/response share a split.
+func (m *Model) resizeFocused(delta int) {
+	switch m.focus {
+	case paneCollections:
+		m.sidebarDelta += delta
+	case paneRequest:
+		m.splitDelta += delta
+	case paneResponse:
+		m.splitDelta -= delta
+	}
+	m.applyLayout()
+}
+
 func (m *Model) applyLayout() {
-	m.sizes = layout(m.width, m.height, m.sidebarVisible)
+	m.sizes = layout(m.width, m.height, layoutOptions{
+		sidebarVisible: m.sidebarVisible,
+		sidebarDelta:   m.sidebarDelta,
+		splitDelta:     m.splitDelta,
+	})
 	if m.zoomed {
 		// The focused pane takes the whole content area.
 		full := PanelSize{Width: m.width, Height: m.height - statusBarHeight}
@@ -629,7 +656,6 @@ func (m *Model) applyLayout() {
 	m.applyFocus()
 }
 
-// View implements tea.Model.
 func (m Model) View() tea.View {
 	var content string
 	if m.width > 0 && m.height > 0 {

@@ -26,7 +26,6 @@ func New() *Importer {
 	return &Importer{}
 }
 
-// Name implements importer.Importer.
 func (i *Importer) Name() string { return "curl" }
 
 // CanHandle reports whether the input looks like a curl command line.

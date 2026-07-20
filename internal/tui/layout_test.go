@@ -19,7 +19,7 @@ func TestLayoutBreakpoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := layout(tt.width, tt.height, tt.sidebar)
+			got := layout(tt.width, tt.height, layoutOptions{sidebarVisible: tt.sidebar})
 			if got.Mode != tt.want {
 				t.Errorf("layout(%d, %d) mode = %v, want %v", tt.width, tt.height, got.Mode, tt.want)
 			}
@@ -29,7 +29,7 @@ func TestLayoutBreakpoints(t *testing.T) {
 
 func TestLayoutTripleWidthsSumToTerminalWidth(t *testing.T) {
 	for _, width := range []int{120, 137, 200} {
-		sizes := layout(width, 40, true)
+		sizes := layout(width, 40, layoutOptions{sidebarVisible: true})
 		sum := sizes.Collections.Width + sizes.Request.Width + sizes.Response.Width
 		if sum != width {
 			t.Errorf("width %d: pane widths sum to %d", width, sum)
@@ -38,13 +38,13 @@ func TestLayoutTripleWidthsSumToTerminalWidth(t *testing.T) {
 }
 
 func TestLayoutDoubleWidths(t *testing.T) {
-	sizes := layout(100, 30, true)
+	sizes := layout(100, 30, layoutOptions{sidebarVisible: true})
 	if sizes.Collections.Width+sizes.Request.Width != 100 {
 		t.Errorf("sidebar visible: widths %d + %d don't sum to 100",
 			sizes.Collections.Width, sizes.Request.Width)
 	}
 
-	sizes = layout(100, 30, false)
+	sizes = layout(100, 30, layoutOptions{})
 	if sizes.Collections.Width != 0 {
 		t.Errorf("sidebar hidden: collections width = %d, want 0", sizes.Collections.Width)
 	}
@@ -55,7 +55,7 @@ func TestLayoutDoubleWidths(t *testing.T) {
 }
 
 func TestLayoutReservesStatusBarRow(t *testing.T) {
-	sizes := layout(120, 40, true)
+	sizes := layout(120, 40, layoutOptions{sidebarVisible: true})
 	if sizes.Collections.Height != 39 {
 		t.Errorf("pane height = %d, want 39", sizes.Collections.Height)
 	}
@@ -63,7 +63,7 @@ func TestLayoutReservesStatusBarRow(t *testing.T) {
 
 func TestLayoutDegenerateSizesDoNotPanic(t *testing.T) {
 	for _, tc := range [][2]int{{0, 0}, {-1, 10}, {10, -1}, {1, 1}, {5, 2}} {
-		sizes := layout(tc[0], tc[1], true)
+		sizes := layout(tc[0], tc[1], layoutOptions{sidebarVisible: true})
 		for _, s := range []PanelSize{sizes.Collections, sizes.Request, sizes.Response} {
 			if s.Width < 0 || s.Height < 0 {
 				t.Errorf("layout(%d, %d) produced negative size %+v", tc[0], tc[1], s)

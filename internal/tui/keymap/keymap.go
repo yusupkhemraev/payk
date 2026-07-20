@@ -17,6 +17,8 @@ type KeyMap struct {
 	NextPane      key.Binding
 	PrevPane      key.Binding
 	ToggleSidebar key.Binding
+	GrowPane      key.Binding
+	ShrinkPane    key.Binding
 
 	Up         key.Binding
 	Down       key.Binding
@@ -86,6 +88,14 @@ func Default() KeyMap {
 		ToggleSidebar: key.NewBinding(
 			key.WithKeys("ctrl+b"),
 			key.WithHelp("ctrl+b", "toggle collections"),
+		),
+		GrowPane: key.NewBinding(
+			key.WithKeys(">"),
+			key.WithHelp(">", "widen pane"),
+		),
+		ShrinkPane: key.NewBinding(
+			key.WithKeys("<"),
+			key.WithHelp("<", "narrow pane"),
 		),
 
 		Up: key.NewBinding(
@@ -199,7 +209,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // help overlay.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar, k.Zoom},
+		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar, k.Zoom, k.GrowPane, k.ShrinkPane},
 		{k.Up, k.Down, k.Top, k.Bottom, k.HalfDown, k.HalfUp, k.Select},
 		{k.Search, k.SearchNext, k.SearchPrev, k.TabNext, k.TabPrev, k.Wrap},
 		{k.Insert, k.AddRow, k.DeleteRow, k.Rename, k.Format, k.Edit},

@@ -1,11 +1,9 @@
 # payk
 
-**payk** (пайк) — *messenger, courier* in Persian and Tajik. A courier takes
-your letter, rides out, and comes back with the reply. That is exactly what
-this tool does: a fast, keyboard-first TUI HTTP client that carries your
-requests and brings back responses — with timings, pretty JSON, and zero
-mouse involved. Think Yaak or the PyCharm HTTP client, living in your
-terminal. One static binary, no runtime dependencies.
+A fast, keyboard-first TUI HTTP client: it carries your requests and brings
+back responses — with timings, pretty JSON, and zero mouse involved. Think
+Yaak or the PyCharm HTTP client, living in your terminal. One static
+binary, no runtime dependencies.
 
 ![payk demo](docs/demo.gif)
 

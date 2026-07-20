@@ -35,7 +35,6 @@ func New() *Importer {
 	return &Importer{openapi: openapi.New()}
 }
 
-// Name implements importer.Importer.
 func (i *Importer) Name() string { return "fastapi" }
 
 // Warnings forwards the underlying OpenAPI importer's warnings.

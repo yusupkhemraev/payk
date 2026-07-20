@@ -18,7 +18,6 @@ const (
 	doubleBreakpoint = 80
 
 	sidebarMinWidth = 24
-	sidebarMaxWidth = 42
 
 	statusBarHeight = 1
 )
@@ -38,10 +37,22 @@ type PanelSizes struct {
 	Response    PanelSize
 }
 
+// minPaneWidth keeps a resized pane usable.
+const minPaneWidth = 20
+
+// layoutOptions tune the computed layout: sidebar visibility (ModeDouble
+// only) and user-driven width adjustments in columns.
+type layoutOptions struct {
+	sidebarVisible bool
+	// sidebarDelta widens (+) or narrows (-) the collections pane.
+	sidebarDelta int
+	// splitDelta moves the request/response boundary: + widens request.
+	splitDelta int
+}
+
 // layout is the single place panel geometry is computed from the terminal
-// size. sidebarVisible only matters in ModeDouble, where the collections tree
-// can be toggled.
-func layout(width, height int, sidebarVisible bool) PanelSizes {
+// size.
+func layout(width, height int, opts layoutOptions) PanelSizes {
 	if width <= 0 || height <= statusBarHeight {
 		return PanelSizes{Mode: ModeSingle}
 	}
@@ -50,8 +61,9 @@ func layout(width, height int, sidebarVisible bool) PanelSizes {
 
 	switch {
 	case width >= tripleBreakpoint:
-		sidebar := clamp(width/4, sidebarMinWidth, sidebarMaxWidth)
-		request := (width - sidebar) / 2
+		sidebar := clamp(width/4+opts.sidebarDelta, sidebarMinWidth, width/2)
+		request := clamp((width-sidebar)/2+opts.splitDelta,
+			minPaneWidth, width-sidebar-minPaneWidth)
 		response := width - sidebar - request
 		return PanelSizes{
 			Mode:        ModeTriple,
@@ -61,8 +73,8 @@ func layout(width, height int, sidebarVisible bool) PanelSizes {
 		}
 
 	case width >= doubleBreakpoint:
-		if sidebarVisible {
-			sidebar := clamp(width/4, sidebarMinWidth, sidebarMaxWidth)
+		if opts.sidebarVisible {
+			sidebar := clamp(width/4+opts.sidebarDelta, sidebarMinWidth, width/2)
 			main := width - sidebar
 			return PanelSizes{
 				Mode:        ModeDouble,
@@ -71,7 +83,7 @@ func layout(width, height int, sidebarVisible bool) PanelSizes {
 				Response:    PanelSize{main, paneHeight},
 			}
 		}
-		request := width / 2
+		request := clamp(width/2+opts.splitDelta, minPaneWidth, width-minPaneWidth)
 		response := width - request
 		return PanelSizes{
 			Mode:     ModeDouble,

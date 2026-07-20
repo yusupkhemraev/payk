@@ -34,7 +34,6 @@ func New() *Importer {
 	return &Importer{}
 }
 
-// Name implements importer.Importer.
 func (i *Importer) Name() string { return "openapi" }
 
 // Warnings returns non-fatal issues from the last Import.
