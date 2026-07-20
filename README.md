@@ -5,7 +5,34 @@ back responses — with timings, pretty JSON, and zero mouse involved. Think
 Yaak or the PyCharm HTTP client, living in your terminal. One static
 binary, no runtime dependencies.
 
-![payk demo](docs/demo.gif)
+![payk](docs/screenshot.png)
+
+## Features
+
+- **Three-pane vim-style UI** — collections tree, request editor, response
+  viewer. `j/k/gg/G` everywhere, `/` to search in any pane, `:` command
+  line, `?` adaptive help. Panes are resizable (`<`/`>`) and any pane goes
+  fullscreen with `z`.
+- **Plain YAML storage** — one file per request, folders are directories,
+  stable key order. Everything lives in `.payk/` next to your code and
+  diffs cleanly in git.
+- **Environments** — `{{var}}` substitution from named environments,
+  `{{env:NAME}}` from process env. Secrets are resolved in memory at send
+  time and never written to disk. Typing `{{` autocompletes variable names.
+- **Importers** — paste a curl command (Chrome DevTools export works
+  as-is), point at an OpenAPI 3.0/3.1 spec (file, URL, or pasted JSON), or
+  at a FastAPI project directory. Trees group by tags, bodies get examples
+  generated from schemas, server URLs become environments, and declared
+  auth (bearer/basic/apiKey) is pre-filled.
+- **Response viewer** — highlighted pretty-printed JSON with a raw-bytes
+  toggle, aligned headers table, DNS/TCP/TLS/TTFB timings, incremental
+  search with `n/N`, soft wrap, scroll position indicator, one-key copy to
+  clipboard, and a per-session history of past responses.
+- **Request editor** — tabbed (URL/Params/Headers/Body/Auth) with
+  insert/normal modes, chained header entry, JSON body formatting and
+  highlighting, and an `$EDITOR` escape hatch for the body.
+
+See **[docs/usage.md](docs/usage.md)** for the full guide.
 
 ## Install
 
@@ -13,29 +40,28 @@ binary, no runtime dependencies.
 go install github.com/yusupkhemraev/payk/cmd/payk@latest
 ```
 
-Homebrew (tap stub, enabled once the tap repo is published):
-
-```sh
-brew install yusupkhemraev/tap/payk
-```
-
-Or grab a binary from the releases page (darwin/linux/windows,
-amd64/arm64).
+Or build from source (`go build ./cmd/payk`), or grab a release binary
+(darwin/linux/windows, amd64/arm64).
 
 ## Quick start
 
 ```sh
 cd your-project
-mkdir -p .payk/collections/api
-payk
+payk                       # discovers ./.payk or ~/.config/payk
 ```
 
-Requests are plain YAML files — one file per request, folders are
-directories, everything git-friendly with stable key order:
+No workspace yet? Import something — payk creates `./.payk` on the fly:
+
+- paste a curl command straight into the terminal and confirm with `y`;
+- `:import https://api.example.com/openapi.json`
+- `:import ~/dev/my-fastapi-project`
+
+Requests are plain YAML, one file each:
 
 ```yaml
 # .payk/collections/api/create-user.yaml
 name: create user
+description: Registers a new account
 method: POST
 url: "{{base_url}}/users"
 headers:
@@ -50,60 +76,42 @@ auth:
   token: "{{env:API_TOKEN}}"
 ```
 
-`{{var}}` comes from the active environment in `.payk/environments.yaml`,
-`{{env:NAME}}` from process environment variables. Resolution happens in
-memory at send time — secrets are never written to disk.
-
-## Importing
-
-- **curl**: paste any curl command (Chrome DevTools “Copy as cURL” works
-  as-is) — payk offers to import it inline.
-- **OpenAPI 3.0/3.1**: `:import openapi.yaml`, `:import https://…/openapi.json`,
-  or paste the spec. The tree is grouped by tags, request bodies get
-  examples generated from schemas, server URLs become environments.
-- **FastAPI**: `:import ~/dev/my-fastapi-project` — payk finds the project’s
-  interpreter (`.venv`, poetry, uv) and asks the app itself for its schema.
-  No Python parsing involved. Set `[tool.payk] entrypoint = "app.main:app"`
-  in `pyproject.toml` if the heuristic can’t find your app.
-
 ## Keybindings
 
 | Key | Action |
 | --- | --- |
 | `h` / `l`, `tab` / `shift+tab` | switch pane focus |
 | `j` / `k`, `gg` / `G`, `ctrl+d` / `ctrl+u` | move / scroll |
-| `enter` | open request · toggle folder · cycle enum field |
+| `enter` | open request · toggle folder · cycle enum field · pick history entry |
 | `i` | edit field (insert mode), `esc` back to normal |
-| `a` / `d` | add / delete param or header row |
-| `d` | delete request/folder/collection in tree (with confirm) |
+| `a` | add param/header row (`enter` chains into the next row) |
+| `d` | delete row in editor · delete tree node (with confirm) |
 | `r` | rename in tree · raw/pretty body in response |
-| `m` | message log (full text of truncated status messages) |
 | `f` | format JSON body |
 | `e` | edit body in `$EDITOR` |
 | `space` | send request (`esc` cancels) |
+| `[` / `]` | previous / next tab (editor and response) |
 | `/`, `n` / `N` | search in pane, next/previous match |
 | `w` | wrap long lines |
 | `y` | copy response body |
+| `m` | message log (full text of truncated status messages) |
 | `z` | fullscreen the focused pane |
+| `<` / `>` | narrow / widen the focused pane |
 | `ctrl+b` | toggle collections sidebar |
-| `:` | command line — `:q` `:w` `:send` `:env <name>` `:import <src>` |
+| `:` | command line — `:q` `:w` `:send` `:env <name>` `:import <src>` `:messages` |
 | `?` | help overlay |
-
-Typing `{{` in any field suggests variables from the active environment;
-`{{env:` completes from process environment names. `tab` accepts,
-`ctrl+n/p` cycle.
 
 ## Layout
 
-Three panes on wide terminals (collections · request · response), two panes
-between 80 and 119 columns with a collapsible sidebar, single pane with tab
-switching below 80. Everything stays usable at 60×20.
+Three panes on wide terminals, two between 80 and 119 columns with a
+collapsible sidebar, single pane with tab switching below 80. Everything
+stays usable at 60×20.
 
 ## Development
 
 ```sh
-go build ./...   # build
-go test ./...    # unit + TUI smoke tests (teatest)
+go build ./...      # build
+go test ./...       # unit + TUI smoke tests (teatest)
 vhs docs/demo.tape  # re-render the demo GIF
 ```
 

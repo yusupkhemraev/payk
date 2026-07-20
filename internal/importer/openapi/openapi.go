@@ -143,6 +143,7 @@ type builder struct {
 	importer *Importer
 	folders  []*core.Folder
 	byName   map[string]*core.Folder
+	security *securityIndex
 }
 
 func (b *builder) warn(format string, args ...any) {
@@ -156,6 +157,7 @@ func (b *builder) build(doc *v3.Document) *core.Collection {
 	}
 	col := &core.Collection{Name: name}
 	b.byName = map[string]*core.Folder{}
+	b.security = newSecurityIndex(doc)
 
 	b.importer.environments = serverEnvironments(name, doc.Servers)
 	if len(b.importer.environments) == 0 {
@@ -173,6 +175,11 @@ func (b *builder) build(doc *v3.Document) *core.Collection {
 				}
 			}
 		}
+	}
+
+	if vars := b.security.summary(); vars != nil {
+		b.warn("spec declares authentication; define %s in an environment or process env",
+			strings.Join(vars, ", "))
 	}
 
 	col.Folders = b.folders
@@ -218,6 +225,7 @@ func (b *builder) buildRequest(method, path string, op *v3.Operation) *core.Requ
 		}
 	}
 
+	b.security.apply(req, op)
 	b.attachBody(req, op)
 	return req
 }

@@ -239,3 +239,66 @@ func TestImportGroupsNonLatinTags(t *testing.T) {
 		t.Errorf("folders = %+v, want two distinct tag folders", col.Folders)
 	}
 }
+
+func TestImportAppliesSecuritySchemes(t *testing.T) {
+	spec := `{
+	  "openapi": "3.1.0", "info": {"title": "Secured"},
+	  "security": [{"bearerAuth": []}],
+	  "paths": {
+	    "/private": {"get": {"summary": "Private", "tags": ["a"]}},
+	    "/basic": {"get": {"summary": "Basic", "tags": ["a"],
+	      "security": [{"basicAuth": []}]}},
+	    "/keyed": {"get": {"summary": "Keyed", "tags": ["a"],
+	      "security": [{"keyAuth": []}]}},
+	    "/open": {"get": {"summary": "Open", "tags": ["a"], "security": []}}
+	  },
+	  "components": {"securitySchemes": {
+	    "bearerAuth": {"type": "http", "scheme": "bearer"},
+	    "basicAuth": {"type": "http", "scheme": "basic"},
+	    "keyAuth": {"type": "apiKey", "in": "header", "name": "X-Api-Key"}
+	  }}}`
+
+	imp := New()
+	col, err := imp.Import(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := folder(t, col, "a").Requests
+
+	private := request(t, requests, "Private")
+	if private.Auth.Type != core.AuthBearer || private.Auth.Token != "{{api_token}}" {
+		t.Errorf("global bearer not applied: %+v", private.Auth)
+	}
+
+	basic := request(t, requests, "Basic")
+	if basic.Auth.Type != core.AuthBasic || basic.Auth.User != "{{api_user}}" || basic.Auth.Pass != "{{api_password}}" {
+		t.Errorf("operation basic override not applied: %+v", basic.Auth)
+	}
+
+	keyed := request(t, requests, "Keyed")
+	found := false
+	for _, h := range keyed.Headers {
+		if h.Name == "X-Api-Key" && h.Value == "{{api_key}}" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("apiKey header not applied: %+v", keyed.Headers)
+	}
+	if keyed.Auth.Type != core.AuthNone {
+		t.Errorf("apiKey must not set auth: %+v", keyed.Auth)
+	}
+
+	// Explicit empty security disables the global requirement.
+	open := request(t, requests, "Open")
+	if open.Auth.Type != core.AuthNone {
+		t.Errorf("empty security should mean no auth: %+v", open.Auth)
+	}
+
+	joined := strings.Join(imp.Warnings(), "\n")
+	for _, want := range []string{"api_token", "api_user", "api_password", "api_key"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warning should list %s: %v", want, imp.Warnings())
+		}
+	}
+}
