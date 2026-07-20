@@ -28,3 +28,23 @@ checksum:
 
 changelog:
   use: github-native
+
+homebrew_casks:
+  - name: payk
+    repository:
+      owner: yusupkhemraev
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/yusupkhemraev/payk
+    description: Keyboard-first TUI HTTP client
+    commit_author:
+      name: goreleaser-bot
+      email: noreply@goreleaser.com
+    # Release binaries are not notarized; strip the quarantine flag so
+    # Gatekeeper does not block the installed binary.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/payk"]
+          end

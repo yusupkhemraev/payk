@@ -36,12 +36,22 @@ See **[docs/usage.md](docs/usage.md)** for the full guide.
 
 ## Install
 
+Homebrew (macOS):
+
+```sh
+brew install yusupkhemraev/tap/payk
+```
+
+Go:
+
 ```sh
 go install github.com/yusupkhemraev/payk/cmd/payk@latest
 ```
 
-Or build from source (`go build ./cmd/payk`), or grab a release binary
-(darwin/linux/windows, amd64/arm64).
+Or grab a release binary from the
+[releases page](https://github.com/yusupkhemraev/payk/releases)
+(darwin/linux/windows, amd64/arm64), or build from source
+(`go build ./cmd/payk`).
 
 ## Quick start
 
