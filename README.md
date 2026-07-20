@@ -42,6 +42,10 @@ Homebrew (macOS):
 brew install yusupkhemraev/tap/payk
 ```
 
+On first install Homebrew asks to trust the tap once — that is its
+standard [tap trust](https://docs.brew.sh/Tap-Trust) prompt for any
+third-party tap.
+
 Go:
 
 ```sh
