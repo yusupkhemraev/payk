@@ -118,12 +118,21 @@ func TestCreateRequestWithoutAnyWorkspace(t *testing.T) {
 		t.Fatalf("no-workspace hint missing:\n%s", plainView(m))
 	}
 
+	// Opening the prompt and cancelling must leave the filesystem
+	// untouched: .payk appears only when a request is actually confirmed.
+	m = typeString(m, "a")
+	m = typeString(m, "abandoned")
+	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if _, err := os.Stat(filepath.Join(work, ".payk")); !os.IsNotExist(err) {
+		t.Fatalf(".payk must not exist after a cancelled add, stat err = %v", err)
+	}
+
 	m = typeString(m, "a")
 	m = typeString(m, "first route")
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if _, err := os.Stat(filepath.Join(work, ".payk", "collections", "api", "first-route.yaml")); err != nil {
-		t.Fatalf("workspace should be created on the fly: %v", err)
+		t.Fatalf("workspace should be created on confirm: %v", err)
 	}
 	if !strings.Contains(plainView(m), "first route") {
 		t.Errorf("tree should show the created request:\n%s", plainView(m))
