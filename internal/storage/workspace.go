@@ -23,18 +23,15 @@ import (
 // ErrNotFound is returned by Discover when no workspace exists.
 var ErrNotFound = errors.New("no payk workspace found")
 
-// Workspace is a payk data directory.
 type Workspace struct {
 	// Dir is the workspace root, i.e. the .payk directory itself.
 	Dir string
 }
 
-// CollectionsDir returns the root directory of the collections tree.
 func (w *Workspace) CollectionsDir() string {
 	return filepath.Join(w.Dir, "collections")
 }
 
-// EnvironmentsFile returns the path of the environments config.
 func (w *Workspace) EnvironmentsFile() string {
 	return filepath.Join(w.Dir, "environments.yaml")
 }

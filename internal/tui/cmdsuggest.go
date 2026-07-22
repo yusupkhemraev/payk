@@ -28,7 +28,6 @@ var commandSpecs = []commandSpec{
 	{name: "q", desc: "quit"},
 }
 
-// refreshCmdSuggestions recomputes completion for the current input.
 func (m *Model) refreshCmdSuggestions() {
 	m.cmdline.setSuggestions(m.commandSuggestions())
 }

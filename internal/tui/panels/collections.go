@@ -58,7 +58,6 @@ const (
 	nodeRequest
 )
 
-// node is one tree entry; folders and collections hold children.
 type node struct {
 	kind     nodeKind
 	name     string
@@ -104,7 +103,6 @@ type Collections struct {
 	pendingDelete *node
 }
 
-// NewCollections builds the collections panel in its loading state.
 func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
 	search := textinput.New()
 	search.Prompt = "/"
@@ -125,7 +123,6 @@ func (m *Collections) Capturing() bool {
 	return m.searching || m.renaming || m.adding || m.pendingDelete != nil
 }
 
-// SetWorkspace replaces the tree content after the workspace load finishes.
 func (m *Collections) SetWorkspace(collections []*core.Collection, hasWorkspace bool, err error) {
 	m.loading = false
 	m.loadErr = err
@@ -207,7 +204,6 @@ func (m *Collections) SetSize(width, height int) {
 	m.ensureCursorVisible()
 }
 
-// SetFocused toggles keyboard focus for this panel.
 func (m *Collections) SetFocused(focused bool) {
 	m.focused = focused
 	if !focused {
@@ -252,7 +248,6 @@ func (m *Collections) ensureCursorVisible() {
 	}
 }
 
-// Update handles navigation keys while the panel is focused.
 func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -338,7 +333,6 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	return m, nil
 }
 
-// updateAdd drives the new-request input.
 func (m Collections) updateAdd(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
@@ -395,7 +389,6 @@ func (m *Collections) SelectRequest(collection string, path []string, name strin
 	return target.request
 }
 
-// updateDeleteConfirm answers the inline "delete?" prompt.
 func (m Collections) updateDeleteConfirm(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	n := m.pendingDelete
 	m.pendingDelete = nil
@@ -411,7 +404,6 @@ func (m Collections) updateDeleteConfirm(msg tea.KeyPressMsg) (Collections, tea.
 	return m, func() tea.Msg { return del }
 }
 
-// updateRename drives the inline rename input.
 func (m Collections) updateRename(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
@@ -486,7 +478,6 @@ func (m Collections) updateSearch(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	return m, cmd
 }
 
-// applyFilter replaces the visible rows with nodes matching the query.
 func (m *Collections) applyFilter() {
 	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
 	if query == "" {
@@ -563,7 +554,6 @@ func (m Collections) openCurrent() (Collections, tea.Cmd) {
 	return m, nil
 }
 
-// requestCount counts requests in the subtree rooted at n.
 func (n *node) requestCount() int {
 	if n.kind == nodeRequest {
 		return 1
@@ -575,7 +565,6 @@ func (n *node) requestCount() int {
 	return total
 }
 
-// View renders the panel at its current size.
 func (m Collections) View() string {
 	title := "Collections"
 	if total := m.totalRequests(); total > 0 {

@@ -21,7 +21,6 @@ type Importer struct {
 	warnings []string
 }
 
-// New returns a curl importer.
 func New() *Importer {
 	return &Importer{}
 }

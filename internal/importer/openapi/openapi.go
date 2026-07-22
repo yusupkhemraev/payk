@@ -30,7 +30,6 @@ type Importer struct {
 	environments []core.Environment
 }
 
-// New returns an OpenAPI importer.
 func New() *Importer {
 	return &Importer{}
 }

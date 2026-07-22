@@ -32,7 +32,6 @@ const (
 
 var respTabNames = []string{"Body", "Headers", "Timings", "History"}
 
-// maxHistory caps how many past responses are kept in memory.
 const maxHistory = 50
 
 // historyEntry is one completed send: the response or the error it ended in.
@@ -47,7 +46,6 @@ type historyEntry struct {
 // text so the UI never freezes on huge responses.
 const highlightLimit = 200 * 1024
 
-// prettyLimit caps JSON pretty-printing.
 const prettyLimit = 2 << 20
 
 // Response is the right panel: response body, headers, and timings.
@@ -92,7 +90,6 @@ type Response struct {
 	histCursor int
 }
 
-// NewResponse builds the response viewer panel.
 func NewResponse(t *theme.Theme, keys keymap.KeyMap) Response {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	search := textinput.New()
@@ -161,7 +158,6 @@ func (m *Response) activeRendered() []string {
 	return m.renderedLines
 }
 
-// setTab switches the viewport to another tab's content.
 func (m *Response) setTab(tab respTab) {
 	if m.tab == tab {
 		return
@@ -328,7 +324,6 @@ func (m *Response) SetSize(width, height int) {
 	m.syncViewportHeight()
 }
 
-// SetFocused toggles keyboard focus for this panel.
 func (m *Response) SetFocused(focused bool) {
 	m.focused = focused
 	if !focused {
@@ -474,7 +469,6 @@ func (m *Response) cycleMatch(delta int) {
 	m.jumpToMatch()
 }
 
-// View renders the panel at its current size.
 func (m Response) View() string {
 	return frame(m.theme, "Response", m.focused, m.width, m.height, m.body())
 }

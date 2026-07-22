@@ -137,7 +137,6 @@ func (w *Workspace) RenameFolder(collection string, folders []string, newName st
 	return nil
 }
 
-// DeleteRequest removes a request file.
 func (w *Workspace) DeleteRequest(collection string, folders []string, req *core.Request) error {
 	path := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...), slug(req.Name)+".yaml")
 	if err := os.Remove(path); err != nil {
@@ -160,7 +159,6 @@ func (w *Workspace) DeleteFolder(collection string, folders []string) error {
 // re-imports. The name has no .yaml extension so the loader ignores it.
 const importSourceFile = ".import"
 
-// SaveImportSource remembers the import input for a collection.
 func (w *Workspace) SaveImportSource(collection, source string) error {
 	dir := filepath.Join(w.CollectionsDir(), collection)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

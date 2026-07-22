@@ -5,7 +5,6 @@ package keymap
 
 import "charm.land/bubbles/v2/key"
 
-// KeyMap holds every binding used across the TUI.
 type KeyMap struct {
 	Quit    key.Binding
 	Help    key.Binding
@@ -49,7 +48,6 @@ type KeyMap struct {
 	Messages key.Binding
 }
 
-// Default returns the standard vim-style key map.
 func Default() KeyMap {
 	return KeyMap{
 		Quit: key.NewBinding(
@@ -200,13 +198,11 @@ func Default() KeyMap {
 	}
 }
 
-// ShortHelp implements help.KeyMap.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Help, k.NextPane, k.Quit}
 }
 
-// FullHelp implements help.KeyMap; columns group related bindings for the
-// help overlay.
+// FullHelp groups related bindings into help overlay columns.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar, k.Zoom, k.GrowPane, k.ShrinkPane},

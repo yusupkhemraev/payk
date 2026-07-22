@@ -11,7 +11,6 @@ type KV struct {
 	Value string `yaml:"value"`
 }
 
-// Body is a request body with a content type hint.
 type Body struct {
 	// Type is a payk body kind: json, text, or form.
 	Type    string `yaml:"type,omitempty"`
@@ -30,7 +29,6 @@ const (
 	AuthBasic  = "basic"
 )
 
-// Auth is the request authentication config.
 type Auth struct {
 	Type  string `yaml:"type,omitempty"`
 	Token string `yaml:"token,omitempty"`
@@ -43,7 +41,6 @@ func (a Auth) IsZero() bool {
 	return a == Auth{}
 }
 
-// Request is a single HTTP request definition.
 type Request struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`

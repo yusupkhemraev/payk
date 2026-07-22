@@ -12,7 +12,6 @@ import (
 	catppuccin "github.com/catppuccin/go"
 )
 
-// Theme holds semantic colors and prebuilt styles for all panels.
 type Theme struct {
 	Flavor catppuccin.Flavor
 
@@ -59,7 +58,6 @@ type Theme struct {
 	methods map[string]lipgloss.Style
 }
 
-// New builds a Theme from a Catppuccin flavor.
 func New(flavor catppuccin.Flavor) *Theme {
 	t := &Theme{
 		Flavor:  flavor,
@@ -170,7 +168,6 @@ func ByName(name string) *Theme {
 	return Default()
 }
 
-// PanelBorder returns the panel border style for the given focus state.
 func (t *Theme) PanelBorder(focused bool) lipgloss.Style {
 	if focused {
 		return t.panelBorderFocused
@@ -178,7 +175,6 @@ func (t *Theme) PanelBorder(focused bool) lipgloss.Style {
 	return t.panelBorder
 }
 
-// PanelTitle returns the panel title style for the given focus state.
 func (t *Theme) PanelTitle(focused bool) lipgloss.Style {
 	if focused {
 		return t.panelTitleFocused
@@ -186,7 +182,6 @@ func (t *Theme) PanelTitle(focused bool) lipgloss.Style {
 	return t.panelTitle
 }
 
-// Method returns the color-coded style for an HTTP method badge.
 func (t *Theme) Method(method string) lipgloss.Style {
 	if s, ok := t.methods[strings.ToUpper(method)]; ok {
 		return s
@@ -194,7 +189,6 @@ func (t *Theme) Method(method string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(t.Subtext).Bold(true)
 }
 
-// Status returns the style for an HTTP status code.
 func (t *Theme) Status(code int) lipgloss.Style {
 	switch {
 	case code >= 500:

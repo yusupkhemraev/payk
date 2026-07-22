@@ -30,7 +30,6 @@ type Importer struct {
 	openapi *openapi.Importer
 }
 
-// New returns a FastAPI project importer.
 func New() *Importer {
 	return &Importer{openapi: openapi.New()}
 }

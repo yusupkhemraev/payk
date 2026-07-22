@@ -5,7 +5,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// cmdSuggestion is one completion candidate for the command line.
 type cmdSuggestion struct {
 	// full replaces the whole input when accepted.
 	full  string
@@ -66,7 +65,6 @@ func (c *cmdLine) cycle(delta int) {
 	c.suggIdx = (c.suggIdx + delta + len(c.suggestions)) % len(c.suggestions)
 }
 
-// accept replaces the input with the selected suggestion.
 func (c *cmdLine) accept() bool {
 	if len(c.suggestions) == 0 {
 		return false

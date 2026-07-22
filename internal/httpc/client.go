@@ -45,7 +45,6 @@ type Response struct {
 	Timings   Timings
 }
 
-// Size returns the number of body bytes kept.
 func (r *Response) Size() int {
 	return len(r.Body)
 }

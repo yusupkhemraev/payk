@@ -1,6 +1,5 @@
 package core
 
-// Folder is a named group of requests and nested folders.
 type Folder struct {
 	Name     string
 	Folders  []*Folder
@@ -15,7 +14,6 @@ type Collection struct {
 	Requests []*Request
 }
 
-// Empty reports whether the collection has no folders and no requests.
 func (c *Collection) Empty() bool {
 	return len(c.Folders) == 0 && len(c.Requests) == 0
 }

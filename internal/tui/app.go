@@ -105,7 +105,6 @@ type Model struct {
 	response    panels.Response
 }
 
-// New builds the root model with the default theme.
 func New(cfg Config) Model {
 	t := theme.Default()
 	keys := keymap.Default()
@@ -348,7 +347,6 @@ func (m Model) handleCmdlineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// executeCommand runs a ":" command line.
 func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {

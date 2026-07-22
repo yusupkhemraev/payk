@@ -65,7 +65,6 @@ type Request struct {
 	suggest *suggestState
 }
 
-// NewRequest builds the request editor panel.
 func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
 	url := textinput.New()
 	url.Prompt = ""
@@ -94,7 +93,6 @@ func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
 	}
 }
 
-// SetRequest replaces the request loaded in the editor.
 func (m *Request) SetRequest(req *core.Request) {
 	m.req = req
 	m.tab = tabURL
@@ -110,7 +108,6 @@ func (m *Request) SetEnvironment(envVars, osEnv []string) {
 	m.osEnv = osEnv
 }
 
-// CurrentRequest returns the request loaded in the editor, or nil.
 func (m *Request) CurrentRequest() *core.Request {
 	return m.req
 }
@@ -134,7 +131,6 @@ func (m *Request) SetSize(width, height int) {
 	m.bodyArea.SetHeight(max(height-8, 3))
 }
 
-// SetFocused toggles keyboard focus for this panel.
 func (m *Request) SetFocused(focused bool) {
 	m.focused = focused
 	if !focused && m.insert {
@@ -159,7 +155,6 @@ func (m *Request) SetBodyContent(content string) {
 	}
 }
 
-// rows returns the number of selectable rows on the current tab.
 func (m *Request) rows() int {
 	switch m.tab {
 	case tabURL:
@@ -183,7 +178,6 @@ func (m *Request) rows() int {
 	return 0
 }
 
-// Update handles keys while the panel is focused.
 func (m Request) Update(msg tea.Msg) (Request, tea.Cmd) {
 	if m.req == nil {
 		return m, nil
@@ -235,7 +229,6 @@ func (m Request) Update(msg tea.Msg) (Request, tea.Cmd) {
 	return m, nil
 }
 
-// formatBody pretty-prints the body when it is valid JSON.
 func (m Request) formatBody() (Request, tea.Cmd) {
 	trimmed := strings.TrimSpace(m.req.Body.Content)
 	if trimmed == "" {
@@ -458,7 +451,6 @@ func (m *Request) acceptSuggestion() {
 	m.refreshSuggestions()
 }
 
-// suggestionLine renders the completion candidates under the active input.
 func (m Request) suggestionLine() string {
 	if !m.suggest.active() {
 		return ""
@@ -553,7 +545,6 @@ func cycle(values []string, current string) string {
 	return values[0]
 }
 
-// View renders the panel at its current size.
 func (m Request) View() string {
 	return frame(m.theme, "Request", m.focused, m.width, m.height, m.body())
 }
