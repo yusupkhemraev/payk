@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -18,12 +19,13 @@ import (
 // non-fatal warnings from the importer. environments is non-nil when the
 // import added or updated environments (e.g. OpenAPI server URLs).
 type importFinishedMsg struct {
-	workspace    *storage.Workspace
-	collections  []*core.Collection
-	environments *core.Environments
-	imported     string
-	warnings     []string
-	err          error
+	workspace     *storage.Workspace
+	collections   []*core.Collection
+	environments  *core.Environments
+	importSources []string
+	imported      string
+	warnings      []string
+	err           error
 }
 
 // runImportCmd feeds the input through the first matching importer, saves
@@ -72,7 +74,7 @@ func runImportCmd(importers []importer.Importer, ws *storage.Workspace, input st
 		}
 
 		collections, err := ws.LoadCollections()
-		return importFinishedMsg{
+		msg := importFinishedMsg{
 			workspace:    ws,
 			collections:  collections,
 			environments: environments,
@@ -80,6 +82,13 @@ func runImportCmd(importers []importer.Importer, ws *storage.Workspace, input st
 			warnings:     importer.WarningsOf(imp),
 			err:          err,
 		}
+		if sources, err := ws.ImportSources(); err == nil {
+			for name := range sources {
+				msg.importSources = append(msg.importSources, name)
+			}
+			sort.Strings(msg.importSources)
+		}
+		return msg
 	}
 }
 

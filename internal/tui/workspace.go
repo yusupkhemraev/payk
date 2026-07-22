@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"os"
+	"sort"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -15,7 +16,10 @@ type workspaceLoadedMsg struct {
 	workspace    *storage.Workspace
 	collections  []*core.Collection
 	environments *core.Environments
-	err          error
+	// importSources lists collections with a recorded import source, for
+	// :reimport completion.
+	importSources []string
+	err           error
 }
 
 // requestSavedMsg reports the outcome of a :w save.
@@ -46,6 +50,12 @@ func loadWorkspaceCmd(cfg Config) tea.Cmd {
 		msg.environments, _ = ws.LoadEnvironments()
 		if msg.environments == nil {
 			msg.environments = &core.Environments{}
+		}
+		if sources, err := ws.ImportSources(); err == nil {
+			for name := range sources {
+				msg.importSources = append(msg.importSources, name)
+			}
+			sort.Strings(msg.importSources)
 		}
 		return msg
 	}

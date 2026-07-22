@@ -92,6 +92,9 @@ type Model struct {
 	showMessages bool
 
 	importers []importer.Importer
+	// importSources caches collections with recorded import sources for
+	// :reimport completion; refreshed on every workspace load.
+	importSources []string
 	// pendingImport holds pasted text awaiting the y/n import prompt;
 	// pendingImportKind names the importer that matched it.
 	pendingImport     string
@@ -140,6 +143,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case workspaceLoadedMsg:
 		m.workspace = msg.workspace
 		m.envs = msg.environments
+		m.importSources = msg.importSources
 		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
 		m.syncEditorEnvironment()
 		return m, nil
@@ -187,6 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case requestCreatedMsg:
 		m.workspace = msg.loaded.workspace
 		m.envs = msg.loaded.environments
+		m.importSources = msg.loaded.importSources
 		m.collections.SetWorkspace(msg.loaded.collections, msg.loaded.workspace != nil, msg.loaded.err)
 		m.syncEditorEnvironment()
 		if req := m.collections.SelectRequest(msg.collection, msg.path, msg.name); req != nil {
@@ -215,7 +220,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		// The open command line takes pastes (e.g. a spec URL for :import).
 		if m.cmdline.active {
-			return m, m.cmdline.update(msg)
+			cmd := m.cmdline.update(msg)
+			m.refreshCmdSuggestions()
+			return m, cmd
 		}
 		// Pasted importable input (curl command, OpenAPI spec) offers an
 		// inline import prompt; anything else goes to the focused panel
@@ -236,6 +243,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.collections.SetWorkspace(msg.collections, true, nil)
+		m.importSources = msg.importSources
 		if msg.environments != nil {
 			m.envs = msg.environments
 			m.syncEditorEnvironment()
@@ -307,18 +315,37 @@ func pasteKindLabel(name string) string {
 	}
 }
 
-// handleCmdlineKey drives the ":" command input while it is open.
+// handleCmdlineKey drives the ":" command input while it is open: tab
+// accepts the highlighted completion, ctrl+n/p (or arrows) cycle.
 func (m Model) handleCmdlineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
 		m.cmdline.close()
 		return m, nil
+
 	case msg.Code == tea.KeyEnter:
 		line := m.cmdline.value()
 		m.cmdline.close()
 		return m.executeCommand(line)
+
+	case msg.Code == tea.KeyTab && msg.Mod == 0:
+		if m.cmdline.accept() {
+			m.refreshCmdSuggestions()
+		}
+		return m, nil
+
+	case msg.String() == "ctrl+n" || msg.Code == tea.KeyDown:
+		m.cmdline.cycle(1)
+		return m, nil
+
+	case msg.String() == "ctrl+p" || msg.Code == tea.KeyUp:
+		m.cmdline.cycle(-1)
+		return m, nil
 	}
-	return m, m.cmdline.update(msg)
+
+	cmd := m.cmdline.update(msg)
+	m.refreshCmdSuggestions()
+	return m, cmd
 }
 
 // executeCommand runs a ":" command line.
@@ -715,7 +742,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Command):
-		return m, m.cmdline.open()
+		cmd := m.cmdline.open()
+		m.refreshCmdSuggestions()
+		return m, cmd
 
 	case key.Matches(msg, m.keys.Send):
 		return m.startSend()
@@ -1054,7 +1083,11 @@ func (m Model) statusView() string {
 		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(prompt)
 	}
 	if m.cmdline.active {
-		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(" " + m.cmdline.view())
+		line := " " + m.cmdline.view()
+		if hints := m.cmdSuggestionLine(m.width - lipgloss.Width(line) - 2); hints != "" {
+			line += "  " + hints
+		}
+		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(line)
 	}
 
 	badge := m.theme.StatusBadge.Render("payk")

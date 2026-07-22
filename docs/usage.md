@@ -205,7 +205,12 @@ can see the actual traceback.
 
 ## 8. Command line
 
-`:` opens the command line (pasting into it works):
+`:` opens the command line (pasting into it works). Completion is built
+in: an empty line lists every command, typing filters them, and argument
+positions complete from real data — `:env ` offers your environment
+names, `:set `/`:unset ` the variables of the active environment,
+`:reimport ` the collections with recorded sources. `tab` accepts the
+highlighted candidate, `ctrl+n`/`ctrl+p` (or arrows) cycle.
 
 | Command | Action |
 | --- | --- |
