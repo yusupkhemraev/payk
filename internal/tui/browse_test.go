@@ -63,7 +63,7 @@ func TestBrowseTreeAndOpenRequest(t *testing.T) {
 
 func TestEmptyWorkspaceShowsHint(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "workspace is empty")
+	waitForOutput(t, tm, "no requests yet")
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
 }

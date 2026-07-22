@@ -177,14 +177,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, deleteCmd(m.workspace, m.cfg, msg)
 
 	case panels.CreateRequestedMsg:
-		ws := m.workspace
-		if ws == nil {
-			wd, err := os.Getwd()
-			if err != nil {
-				m.setStatus("create failed: "+err.Error(), true)
-				return m, nil
-			}
-			ws = &storage.Workspace{Dir: filepath.Join(wd, ".payk")}
+		ws, err := m.ensureWorkspace()
+		if err != nil {
+			m.setStatus("create failed: "+err.Error(), true)
+			return m, nil
 		}
 		return m, createRequestCmd(ws, m.cfg, msg)
 
@@ -352,11 +348,37 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "env":
+		switch {
+		case len(fields) == 1:
+			m.setStatus(m.environmentList(), false)
+			return m, nil
+		case fields[1] == "new" && len(fields) >= 3:
+			return m.createEnvironment(fields[2])
+		case fields[1] == "new":
+			m.setStatus("usage: :env new <name>", true)
+			return m, nil
+		default:
+			return m.switchEnvironment(fields[1])
+		}
+
+	case "set":
 		if len(fields) < 2 {
-			m.setStatus("usage: :env <name>", true)
+			m.setStatus("usage: :set <name> <value>  (or name=value)", true)
 			return m, nil
 		}
-		return m.switchEnvironment(fields[1])
+		name, value := parseVarAssignment(fields[1:])
+		if name == "" {
+			m.setStatus("usage: :set <name> <value>  (or name=value)", true)
+			return m, nil
+		}
+		return m.setVariable(name, value)
+
+	case "unset":
+		if len(fields) < 2 {
+			m.setStatus("usage: :unset <name>", true)
+			return m, nil
+		}
+		return m.unsetVariable(fields[1])
 
 	case "messages", "msgs":
 		m.showMessages = true
@@ -375,10 +397,151 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 		m.setStatus("importing "+input+"…", false)
 		return m, runImportCmd(m.importers, m.workspace, input)
 
+	case "reimport":
+		return m.reimport(fields[1:])
+
 	default:
 		m.setStatus("unknown command: "+fields[0], true)
 		return m, nil
 	}
+}
+
+// parseVarAssignment accepts ":set name value with spaces" and
+// ":set name=value" forms.
+func parseVarAssignment(fields []string) (name, value string) {
+	if n, v, found := strings.Cut(fields[0], "="); found {
+		rest := append([]string{v}, fields[1:]...)
+		return strings.TrimSpace(n), strings.Join(rest, " ")
+	}
+	if len(fields) < 2 {
+		return "", ""
+	}
+	return fields[0], strings.Join(fields[1:], " ")
+}
+
+// ensureWorkspace returns the current workspace, creating a project-local
+// .payk when none exists yet.
+func (m *Model) ensureWorkspace() (*storage.Workspace, error) {
+	if m.workspace != nil {
+		return m.workspace, nil
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	m.workspace = &storage.Workspace{Dir: filepath.Join(wd, ".payk")}
+	return m.workspace, nil
+}
+
+func (m Model) environmentList() string {
+	if len(m.envs.Environments) == 0 {
+		return "no environments — create one with :env new <name>"
+	}
+	names := make([]string, 0, len(m.envs.Environments))
+	for _, env := range m.envs.Environments {
+		name := env.Name
+		if name == m.envs.Active {
+			name = "*" + name
+		}
+		names = append(names, name)
+	}
+	return "environments: " + strings.Join(names, " · ")
+}
+
+func (m Model) createEnvironment(name string) (tea.Model, tea.Cmd) {
+	if m.envs.Get(name) != nil {
+		return m.switchEnvironment(name)
+	}
+	ws, err := m.ensureWorkspace()
+	if err != nil {
+		m.setStatus("env new failed: "+err.Error(), true)
+		return m, nil
+	}
+	m.envs.Environments = append(m.envs.Environments,
+		core.Environment{Name: name, Vars: map[string]string{}})
+	m.envs.Active = name
+	m.syncEditorEnvironment()
+	m.setStatus("created environment "+name+" — add vars with :set <name> <value>", false)
+	return m, saveEnvironmentsCmd(ws, m.envs)
+}
+
+func (m Model) setVariable(name, value string) (tea.Model, tea.Cmd) {
+	ws, err := m.ensureWorkspace()
+	if err != nil {
+		m.setStatus("set failed: "+err.Error(), true)
+		return m, nil
+	}
+	// With no environments yet, :set bootstraps a default one.
+	if m.envs.ActiveEnv() == nil {
+		m.envs.Environments = append(m.envs.Environments,
+			core.Environment{Name: "default", Vars: map[string]string{}})
+		m.envs.Active = "default"
+	}
+	env := m.envs.ActiveEnv()
+	if env.Vars == nil {
+		env.Vars = map[string]string{}
+	}
+	env.Vars[name] = value
+	m.syncEditorEnvironment()
+	m.setStatus(fmt.Sprintf("set %s in %s", name, env.Name), false)
+	return m, saveEnvironmentsCmd(ws, m.envs)
+}
+
+func (m Model) unsetVariable(name string) (tea.Model, tea.Cmd) {
+	env := m.envs.ActiveEnv()
+	if env == nil {
+		m.setStatus("no active environment", true)
+		return m, nil
+	}
+	if _, ok := env.Vars[name]; !ok {
+		m.setStatus(fmt.Sprintf("no variable %q in %s", name, env.Name), true)
+		return m, nil
+	}
+	delete(env.Vars, name)
+	m.syncEditorEnvironment()
+	m.setStatus(fmt.Sprintf("unset %s in %s", name, env.Name), false)
+	if m.workspace == nil {
+		return m, nil
+	}
+	return m, saveEnvironmentsCmd(m.workspace, m.envs)
+}
+
+// reimport re-runs the recorded import source for one collection, or for
+// every collection that has one.
+func (m Model) reimport(args []string) (tea.Model, tea.Cmd) {
+	if m.workspace == nil {
+		m.setStatus("no workspace — nothing to reimport", true)
+		return m, nil
+	}
+	sources, err := m.workspace.ImportSources()
+	if err != nil {
+		m.setStatus("reimport failed: "+err.Error(), true)
+		return m, nil
+	}
+	if len(sources) == 0 {
+		m.setStatus("no imported collections — use :import first", true)
+		return m, nil
+	}
+
+	if len(args) > 0 {
+		source, ok := sources[args[0]]
+		if !ok {
+			m.setStatus("no import source recorded for "+args[0], true)
+			return m, nil
+		}
+		m.setStatus("reimporting "+args[0]+"…", false)
+		return m, runImportCmd(m.importers, m.workspace, source)
+	}
+
+	cmds := make([]tea.Cmd, 0, len(sources))
+	names := make([]string, 0, len(sources))
+	for name, source := range sources {
+		names = append(names, name)
+		cmds = append(cmds, runImportCmd(m.importers, m.workspace, source))
+	}
+	sort.Strings(names)
+	m.setStatus("reimporting "+strings.Join(names, ", ")+"…", false)
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) switchEnvironment(name string) (tea.Model, tea.Cmd) {

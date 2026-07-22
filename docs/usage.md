@@ -104,9 +104,22 @@ environments:
   environment at send time;
 - `{{env:API_TOKEN}}` resolves from the process environment — good for
   secrets that must never land in a file;
-- `:env staging` switches the active environment (persisted);
 - unresolved variables block the send with an error naming them — nothing
   goes out half-substituted.
+
+Manage environments without touching the file:
+
+```
+:env                       list environments (* marks the active one)
+:env new staging           create an environment and switch to it
+:env staging               switch (persisted in environments.yaml)
+:set base_url http://x     set a variable in the active environment
+:set token=abc             name=value form works too
+:unset token               remove a variable
+```
+
+`:set` with no environments yet bootstraps a `default` one, and freshly
+set variables immediately show up in `{{` completion.
 
 ## 6. Sending and reading responses
 
@@ -161,6 +174,21 @@ or just paste the spec JSON. The importer:
   them, so a send fails loudly instead of going out unauthenticated —
   a warning after import lists exactly which variables to set.
 
+### Re-importing
+
+Spec and FastAPI imports record their source in the collection
+(`collections/<name>/.import`). When the API changes:
+
+```
+:reimport paydo-api        refresh one collection from its source
+:reimport                  refresh every imported collection
+```
+
+A re-import replaces the collection's contents, so new routes appear and
+removed or renamed ones disappear — local edits to imported requests are
+replaced along with them. curl imports are not affected: pasted commands
+keep accumulating in `imported`.
+
 ### FastAPI
 
 ```
@@ -184,6 +212,11 @@ can see the actual traceback.
 | `:q` | quit |
 | `:w` | save the current request to disk |
 | `:send` | send the current request |
+| `:env` | list environments |
+| `:env new <name>` | create an environment and switch to it |
 | `:env <name>` | switch the active environment |
+| `:set <name> <value>` | set a variable in the active environment |
+| `:unset <name>` | remove a variable from the active environment |
 | `:import <file-or-url-or-dir>` | run an importer (`~` expands) |
+| `:reimport [collection]` | re-run recorded import sources |
 | `:messages` | open the message log |

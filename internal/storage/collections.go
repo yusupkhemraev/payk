@@ -156,6 +156,47 @@ func (w *Workspace) DeleteFolder(collection string, folders []string) error {
 	return nil
 }
 
+// importSourceFile records where a collection was imported from, enabling
+// re-imports. The name has no .yaml extension so the loader ignores it.
+const importSourceFile = ".import"
+
+// SaveImportSource remembers the import input for a collection.
+func (w *Workspace) SaveImportSource(collection, source string) error {
+	dir := filepath.Join(w.CollectionsDir(), collection)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("storage: create collection dir: %w", err)
+	}
+	path := filepath.Join(dir, importSourceFile)
+	if err := os.WriteFile(path, []byte(source+"\n"), 0o644); err != nil {
+		return fmt.Errorf("storage: write import source: %w", err)
+	}
+	return nil
+}
+
+// ImportSources returns collection name → the input it was imported from,
+// for collections that recorded one.
+func (w *Workspace) ImportSources() (map[string]string, error) {
+	entries, err := os.ReadDir(w.CollectionsDir())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read collections dir: %w", err)
+	}
+
+	sources := map[string]string{}
+	for _, entry := range sortedDirs(entries) {
+		data, err := os.ReadFile(filepath.Join(w.CollectionsDir(), entry.Name(), importSourceFile))
+		if err != nil {
+			continue
+		}
+		if source := strings.TrimSpace(string(data)); source != "" {
+			sources[entry.Name()] = source
+		}
+	}
+	return sources, nil
+}
+
 func marshalYAML(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

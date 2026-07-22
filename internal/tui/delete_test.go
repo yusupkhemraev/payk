@@ -53,7 +53,7 @@ func TestDeleteCollectionRemovesDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "collections", "api")); !os.IsNotExist(err) {
 		t.Errorf("collection dir should be gone, stat err = %v", err)
 	}
-	if !strings.Contains(plainView(m), "workspace is empty") {
+	if !strings.Contains(plainView(m), "no requests yet") {
 		t.Errorf("tree should be empty:\n%s", plainView(m))
 	}
 }

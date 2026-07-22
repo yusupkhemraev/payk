@@ -116,7 +116,7 @@ auth:
 | `z` | fullscreen the focused pane |
 | `<` / `>` | narrow / widen the focused pane |
 | `ctrl+b` | toggle collections sidebar |
-| `:` | command line — `:q` `:w` `:send` `:env <name>` `:import <src>` `:messages` |
+| `:` | command line — `:q` `:w` `:send` `:env` `:set` `:import` `:reimport` `:messages` |
 | `?` | help overlay |
 
 ## Layout

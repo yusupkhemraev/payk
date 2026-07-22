@@ -49,8 +49,21 @@ func runImportCmd(importers []importer.Importer, ws *storage.Workspace, input st
 			ws = &storage.Workspace{Dir: filepath.Join(wd, ".payk")}
 		}
 
+		// Spec-based imports replace the collection so removed or renamed
+		// routes disappear on re-import; curl imports keep appending to
+		// theirs. The source is recorded to power :reimport.
+		if imp.Name() != "curl" {
+			if err := ws.DeleteFolder(collection.Name, nil); err != nil {
+				return importFinishedMsg{workspace: ws, err: err}
+			}
+		}
 		if err := saveCollection(ws, collection); err != nil {
 			return importFinishedMsg{workspace: ws, err: err}
+		}
+		if imp.Name() != "curl" {
+			if err := ws.SaveImportSource(collection.Name, input); err != nil {
+				return importFinishedMsg{workspace: ws, err: err}
+			}
 		}
 
 		environments, err := mergeEnvironments(ws, importer.EnvironmentsOf(imp))

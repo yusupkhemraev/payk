@@ -272,9 +272,9 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 		return m.updateDeleteConfirm(keyMsg)
 	}
 
-	// Adding works even in an empty workspace: the request lands in a
-	// default collection.
-	if key.Matches(keyMsg, m.keys.AddRow) && m.hasWorkspace {
+	// Adding works even before any workspace exists: the root model
+	// creates ./.payk and a default collection on the fly.
+	if key.Matches(keyMsg, m.keys.AddRow) && !m.loading {
 		m.adding = true
 		m.addInput.SetValue("")
 		return m, m.addInput.Focus()
@@ -598,10 +598,11 @@ func (m Collections) body() string {
 		return m.theme.Muted.Render(" loading…")
 	case m.loadErr != nil:
 		return m.theme.Muted.Render(" error: " + m.loadErr.Error())
-	case !m.hasWorkspace:
-		return m.theme.Muted.Render(" no workspace found\n\n create .payk/collections/\n in your project")
-	case len(m.visible) == 0 && !m.searching:
-		return m.theme.Muted.Render(" workspace is empty\n\n add YAML files under\n .payk/collections/")
+	case (!m.hasWorkspace || len(m.visible) == 0) && !m.searching && !m.adding:
+		return m.theme.Muted.Render(" no requests yet\n\n" +
+			" a — create a request\n" +
+			" :import <spec|url|dir>\n" +
+			" or paste a curl command")
 	}
 
 	var b strings.Builder
