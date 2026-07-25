@@ -20,12 +20,10 @@ import (
 
 const scanTimeout = 30 * time.Second
 
-// stderrTail caps how much captured stderr is surfaced in errors.
 const stderrTail = 2000
 
-// Importer implements importer.Importer for FastAPI project directories.
-// It is not safe for concurrent use: Warnings and Environments report the
-// last Import.
+// Importer is not safe for concurrent use: Warnings and Environments report
+// the last Import.
 type Importer struct {
 	openapi *openapi.Importer
 }
@@ -36,13 +34,10 @@ func New() *Importer {
 
 func (i *Importer) Name() string { return "fastapi" }
 
-// Warnings forwards the underlying OpenAPI importer's warnings.
 func (i *Importer) Warnings() []string { return i.openapi.Warnings() }
 
-// Environments forwards environments derived from the generated spec.
 func (i *Importer) Environments() []core.Environment { return i.openapi.Environments() }
 
-// CanHandle accepts directories that look like FastAPI projects.
 func (i *Importer) CanHandle(input string) bool {
 	dir := strings.TrimSpace(input)
 	info, err := os.Stat(dir)
@@ -60,8 +55,6 @@ func (i *Importer) CanHandle(input string) bool {
 	return err == nil
 }
 
-// Import locates the interpreter and the app, extracts the OpenAPI spec via
-// a subprocess, and feeds it to the OpenAPI importer.
 func (i *Importer) Import(ctx context.Context, input string) (*core.Collection, error) {
 	root, err := filepath.Abs(strings.TrimSpace(input))
 	if err != nil {
@@ -94,8 +87,6 @@ func (i *Importer) Import(ctx context.Context, input string) (*core.Collection, 
 	return col, nil
 }
 
-// locateApp finds "module:attr": the payk.entrypoint option in
-// pyproject.toml wins, then a heuristic scan of conventional entry files.
 func locateApp(root string) (module, attr string, err error) {
 	if module, attr, ok := entrypointFromPyproject(root); ok {
 		return module, attr, nil
@@ -109,9 +100,7 @@ var (
 	fastapiVarRe = regexp.MustCompile(`(?m)^\s*(\w+)\s*=\s*(?:fastapi\.)?FastAPI\s*\(`)
 )
 
-// entrypointFromPyproject reads the [tool.payk] entrypoint option, e.g.
-// entrypoint = "app.main:app". A single-key section scan avoids pulling in a
-// TOML parser.
+// A single-key section scan avoids pulling in a TOML parser.
 func entrypointFromPyproject(root string) (string, string, bool) {
 	data, err := os.ReadFile(filepath.Join(root, "pyproject.toml"))
 	if err != nil {
@@ -136,8 +125,6 @@ func entrypointFromPyproject(root string) (string, string, bool) {
 	return "", "", false
 }
 
-// entrypointFromHeuristic scans conventional entry files for a FastAPI()
-// assignment and derives the module path from the file location.
 func entrypointFromHeuristic(root string) (string, string, error) {
 	candidates := []string{
 		"main.py", "app.py",
@@ -160,7 +147,6 @@ func entrypointFromHeuristic(root string) (string, string, error) {
 		"fastapi: no FastAPI app found — set [tool.payk] entrypoint = \"module:attr\" in pyproject.toml")
 }
 
-// locateInterpreter finds the project's Python: .venv, then poetry, then uv.
 // The result is an argv prefix, since uv runs python through its own CLI.
 func locateInterpreter(root string) ([]string, error) {
 	for _, candidate := range []string{
@@ -190,8 +176,6 @@ func locateInterpreter(root string) ([]string, error) {
 		"fastapi: no interpreter found (looked for .venv/bin/python, poetry, uv)")
 }
 
-// extractSpec runs the interpreter to import the app and print its OpenAPI
-// schema as JSON. Import errors surface with the captured stderr.
 func extractSpec(ctx context.Context, root string, interpreter []string, module, attr string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, scanTimeout)
 	defer cancel()

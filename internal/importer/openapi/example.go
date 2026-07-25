@@ -15,8 +15,6 @@ import (
 // maxExampleDepth caps schema recursion so circular $refs cannot loop.
 const maxExampleDepth = 6
 
-// attachBody generates a JSON example body from the operation's request
-// body schema.
 func (b *builder) attachBody(req *core.Request, op *v3.Operation) {
 	if op.RequestBody == nil || op.RequestBody.Content == nil {
 		return
@@ -65,8 +63,6 @@ func exampleFromMedia(media *v3.MediaType) any {
 	return exampleFromSchema(media.Schema, 0)
 }
 
-// exampleFromSchema builds a representative value for a schema: explicit
-// example/default/enum first, then type-driven synthesis.
 func exampleFromSchema(proxy *base.SchemaProxy, depth int) any {
 	if proxy == nil || depth > maxExampleDepth {
 		return nil
@@ -171,7 +167,6 @@ func decodeNode(node *yaml.Node) any {
 	return v
 }
 
-// paramExample renders a scalar example for a parameter value.
 func paramExample(param *v3.Parameter) string {
 	if v := decodeNode(param.Example); v != nil {
 		return scalarString(v)

@@ -26,8 +26,6 @@ type Warner interface {
 	Warnings() []string
 }
 
-// WarningsOf returns the warnings of the last Import, if the importer
-// reports any.
 func WarningsOf(imp Importer) []string {
 	if w, ok := imp.(Warner); ok {
 		return w.Warnings()
@@ -41,7 +39,6 @@ type EnvironmentProvider interface {
 	Environments() []core.Environment
 }
 
-// EnvironmentsOf returns environments produced by the last Import, if any.
 func EnvironmentsOf(imp Importer) []core.Environment {
 	if p, ok := imp.(EnvironmentProvider); ok {
 		return p.Environments()
@@ -49,7 +46,6 @@ func EnvironmentsOf(imp Importer) []core.Environment {
 	return nil
 }
 
-// Find returns the first registered importer that can handle the input.
 func Find(importers []Importer, input string) Importer {
 	for _, imp := range importers {
 		if imp.CanHandle(input) {

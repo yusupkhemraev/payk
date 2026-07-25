@@ -34,7 +34,6 @@ var respTabNames = []string{"Body", "Headers", "Timings", "History"}
 
 const maxHistory = 50
 
-// historyEntry is one completed send: the response or the error it ended in.
 type historyEntry struct {
 	label string
 	at    time.Time
@@ -48,7 +47,6 @@ const highlightLimit = 200 * 1024
 
 const prettyLimit = 2 << 20
 
-// Response is the right panel: response body, headers, and timings.
 type Response struct {
 	theme *theme.Theme
 	keys  keymap.KeyMap
@@ -103,14 +101,12 @@ func (m *Response) Searching() bool {
 	return m.searching
 }
 
-// StartSending switches to the in-flight state and starts the spinner.
 func (m *Response) StartSending() tea.Cmd {
 	m.sending = true
 	m.err = nil
 	return m.spin.Tick
 }
 
-// SetResponse records the send result in history and shows it.
 func (m *Response) SetResponse(label string, resp *httpc.Response, err error) {
 	m.history = append(m.history, historyEntry{label: label, at: time.Now(), resp: resp, err: err})
 	if len(m.history) > maxHistory {
@@ -120,7 +116,6 @@ func (m *Response) SetResponse(label string, resp *httpc.Response, err error) {
 	m.loadResponse(resp, err)
 }
 
-// loadResponse renders a response (current or from history) into the viewer.
 func (m *Response) loadResponse(resp *httpc.Response, err error) {
 	m.sending = false
 	m.resp = resp
@@ -142,7 +137,6 @@ func (m *Response) loadResponse(resp *httpc.Response, err error) {
 	}
 }
 
-// activePlain returns the body lines search should match against.
 func (m *Response) activePlain() []string {
 	if m.raw {
 		return m.rawLines
@@ -150,7 +144,6 @@ func (m *Response) activePlain() []string {
 	return m.plainLines
 }
 
-// activeRendered returns the body lines shown in the viewport.
 func (m *Response) activeRendered() []string {
 	if m.raw {
 		return m.rawLines
@@ -173,7 +166,6 @@ func (m *Response) closeSearch() {
 	m.syncViewportHeight()
 }
 
-// searchBarVisible reports whether a search line occupies a viewport row.
 func (m *Response) searchBarVisible() bool {
 	return m.searching || (m.query != "" && len(m.matches) > 0)
 }
@@ -187,8 +179,6 @@ func (m *Response) syncViewportHeight() {
 	m.vp.SetHeight(max(height, 1))
 }
 
-// syncViewport rebuilds the viewport content for the active tab, applying
-// search highlighting and soft wrapping.
 func (m *Response) syncViewport() {
 	m.syncViewportHeight()
 	switch m.tab {
@@ -266,8 +256,6 @@ func (m *Response) bodyLines() []string {
 	return m.wrapLines(lines, &m.lineOffsets)
 }
 
-// wrapLines soft-wraps each line at the viewport width when wrap is on,
-// optionally recording where each original line starts.
 func (m *Response) wrapLines(lines []string, offsets *[]int) []string {
 	if !m.wrap {
 		if offsets != nil {
@@ -303,7 +291,6 @@ func (m *Response) computeMatches() {
 	}
 }
 
-// jumpToMatch scrolls the current match into view with a little context.
 func (m *Response) jumpToMatch() {
 	m.syncViewport()
 	if len(m.matches) == 0 {
@@ -436,8 +423,6 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	return m, nil
 }
 
-// updateSearch drives the "/" input: live matching while typing, enter keeps
-// the query for n/N, esc clears it.
 func (m Response) updateSearch(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
@@ -495,8 +480,6 @@ func (m Response) body() string {
 	return b.String()
 }
 
-// renderError word-wraps the error to the panel width, continuation lines
-// aligned under the text.
 func (m Response) renderError(b *strings.Builder) {
 	const prefix = " error "
 	limit := max(m.width-2-len(prefix), 16)
@@ -519,7 +502,6 @@ func (m Response) renderResponse(b *strings.Builder) {
 	b.WriteString(m.vp.View())
 }
 
-// searchLine renders the "/" input or the committed query with match count.
 func (m Response) searchLine() string {
 	switch {
 	case m.searching:
@@ -549,8 +531,6 @@ func (m Response) statusLine() string {
 	return line
 }
 
-// scrollIndicator shows the visible line range and position for content
-// taller than the viewport, plus the wrap state.
 func (m Response) scrollIndicator() string {
 	total := m.vp.TotalLineCount()
 	visible := m.vp.VisibleLineCount()
@@ -628,7 +608,6 @@ func looksLikeJSON(resp *httpc.Response) bool {
 	return len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 }
 
-// buildHeaderLines renders headers as an aligned two-column table.
 func (m Response) buildHeaderLines(resp *httpc.Response) []string {
 	names := make([]string, 0, len(resp.Headers))
 	nameWidth := 0

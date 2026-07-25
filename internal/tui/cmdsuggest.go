@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// commandSpec describes a top-level ":" command for completion.
 type commandSpec struct {
 	name string
 	desc string
@@ -106,9 +105,6 @@ func (m *Model) varArgSuggestions(head, rest string) []cmdSuggestion {
 	return out
 }
 
-// cmdSuggestionLine renders the completion candidates for the status bar:
-// labels with the selected one highlighted, plus its description and the
-// accept hint, truncated to the given width.
 func (m Model) cmdSuggestionLine(width int) string {
 	suggestions := m.cmdline.suggestions
 	if len(suggestions) == 0 || width < 10 {

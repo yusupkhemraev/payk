@@ -23,8 +23,8 @@ import (
 
 const fetchTimeout = 30 * time.Second
 
-// Importer implements importer.Importer for OpenAPI specs. It is not safe
-// for concurrent use: Warnings and Environments report the last Import.
+// Importer is not safe for concurrent use: Warnings and Environments report
+// the last Import.
 type Importer struct {
 	warnings     []string
 	environments []core.Environment
@@ -36,15 +36,10 @@ func New() *Importer {
 
 func (i *Importer) Name() string { return "openapi" }
 
-// Warnings returns non-fatal issues from the last Import.
 func (i *Importer) Warnings() []string { return i.warnings }
 
-// Environments returns environments derived from server URLs during the
-// last Import.
 func (i *Importer) Environments() []core.Environment { return i.environments }
 
-// CanHandle accepts spec file paths, http(s) URLs, and raw content with
-// openapi/swagger markers.
 func (i *Importer) CanHandle(input string) bool {
 	trimmed := strings.TrimSpace(input)
 	switch {
@@ -75,7 +70,6 @@ func isSpecFile(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// Import loads and parses the spec, producing a collection tree.
 func (i *Importer) Import(ctx context.Context, input string) (*core.Collection, error) {
 	i.warnings = nil
 	i.environments = nil
@@ -137,7 +131,6 @@ func fetch(ctx context.Context, url string) ([]byte, error) {
 	return data, nil
 }
 
-// builder assembles the collection while collecting warnings.
 type builder struct {
 	importer *Importer
 	folders  []*core.Folder
@@ -195,7 +188,6 @@ func (b *builder) folderNamed(name string) *core.Folder {
 	return f
 }
 
-// groupFor picks the folder: the first tag, else the first path segment.
 func groupFor(op *v3.Operation, path string) string {
 	if len(op.Tags) > 0 && strings.TrimSpace(op.Tags[0]) != "" {
 		return slug(op.Tags[0])

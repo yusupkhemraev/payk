@@ -12,7 +12,6 @@ import (
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
 )
 
-// editorFinishedMsg carries the body text edited in $EDITOR.
 type editorFinishedMsg struct {
 	content string
 	err     error
@@ -55,7 +54,6 @@ func openEditorCmd(msg panels.EditBodyRequestedMsg) tea.Cmd {
 	})
 }
 
-// renameCmd performs the storage rename and reloads the workspace.
 func renameCmd(ws *storage.Workspace, cfg Config, msg panels.RenameRequestedMsg) tea.Cmd {
 	return func() tea.Msg {
 		var err error
@@ -80,7 +78,6 @@ type requestCreatedMsg struct {
 	name       string
 }
 
-// createRequestCmd writes a fresh GET request to disk and reloads the tree.
 func createRequestCmd(ws *storage.Workspace, cfg Config, msg panels.CreateRequestedMsg) tea.Cmd {
 	return func() tea.Msg {
 		req := &core.Request{Name: msg.Name, Method: "GET"}
@@ -100,7 +97,6 @@ func createRequestCmd(ws *storage.Workspace, cfg Config, msg panels.CreateReques
 	}
 }
 
-// deleteCmd removes a request file or folder directory and reloads.
 func deleteCmd(ws *storage.Workspace, cfg Config, msg panels.DeleteRequestedMsg) tea.Cmd {
 	return func() tea.Msg {
 		var err error

@@ -11,7 +11,6 @@ import (
 	"github.com/yusupkhemraev/payk/internal/storage"
 )
 
-// workspaceLoadedMsg carries the result of the initial workspace load.
 type workspaceLoadedMsg struct {
 	workspace    *storage.Workspace
 	collections  []*core.Collection
@@ -22,20 +21,16 @@ type workspaceLoadedMsg struct {
 	err           error
 }
 
-// requestSavedMsg reports the outcome of a :w save.
 type requestSavedMsg struct {
 	name string
 	err  error
 }
 
-// environmentsSavedMsg reports persisting the active environment switch.
 type environmentsSavedMsg struct {
 	err error
 }
 
-// loadWorkspaceCmd discovers the workspace and reads the collections tree
-// and environments. All file IO happens here, inside a command, never in
-// Update.
+// All file IO happens here, inside a command, never in Update.
 func loadWorkspaceCmd(cfg Config) tea.Cmd {
 	return func() tea.Msg {
 		ws, err := resolveWorkspace(cfg)
@@ -70,8 +65,6 @@ func saveRequestCmd(ws *storage.Workspace, collection string, path []string, req
 	}
 }
 
-// saveEnvironmentsCmd persists the environments config (e.g. the active
-// environment after :env).
 func saveEnvironmentsCmd(ws *storage.Workspace, envs *core.Environments) tea.Cmd {
 	snapshot := *envs
 	return func() tea.Msg {

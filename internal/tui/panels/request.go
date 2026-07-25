@@ -35,8 +35,7 @@ var bodyTypes = []string{"json", "text", "form"}
 
 var authTypes = []string{core.AuthNone, core.AuthBearer, core.AuthBasic}
 
-// Request is the center panel: a tabbed request editor with vim-style
-// normal/insert modes. Edits mutate the in-memory request; :w persists.
+// Request edits mutate the in-memory request; :w persists.
 type Request struct {
 	theme *theme.Theme
 	keys  keymap.KeyMap
@@ -145,7 +144,6 @@ type EditBodyRequestedMsg struct {
 	BodyType string
 }
 
-// SetBodyContent replaces the body after an external editor session.
 func (m *Request) SetBodyContent(content string) {
 	if m.req != nil {
 		m.req.Body.Content = content
@@ -275,8 +273,6 @@ func (m *Request) currentKVs() *[]core.KV {
 	return &m.req.Headers
 }
 
-// activateRow either cycles an enum row (method, body type, auth type) or
-// enters insert mode on a text row.
 func (m Request) activateRow() (Request, tea.Cmd) {
 	switch m.tab {
 	case tabURL:
@@ -470,8 +466,6 @@ func (m Request) suggestionLine() string {
 	return " " + m.theme.FieldLabel.Render("↹") + " " + strings.Join(parts, " ")
 }
 
-// commitInsert writes the active input back into the request and leaves
-// insert mode.
 func (m *Request) commitInsert() {
 	switch m.tab {
 	case tabURL:
@@ -599,7 +593,6 @@ func (m Request) tabBar() string {
 	return " " + strings.Join(parts, m.theme.TabInactive.Render(" · "))
 }
 
-// renderRow draws one selectable line, highlighting it in normal mode.
 func (m Request) renderField(b *strings.Builder, row int, label, value string) {
 	selected := m.focused && !m.insert && m.row == row
 	line := fmt.Sprintf("%-7s %s", label, value)

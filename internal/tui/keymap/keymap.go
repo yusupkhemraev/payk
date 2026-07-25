@@ -202,7 +202,6 @@ func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Help, k.NextPane, k.Quit}
 }
 
-// FullHelp groups related bindings into help overlay columns.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.NextPane, k.PrevPane, k.ToggleSidebar, k.Zoom, k.GrowPane, k.ShrinkPane},

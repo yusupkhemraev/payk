@@ -71,7 +71,6 @@ type node struct {
 	path       []string
 }
 
-// Collections is the left panel: the collections/requests tree.
 type Collections struct {
 	theme *theme.Theme
 	keys  keymap.KeyMap
@@ -436,8 +435,6 @@ func (m Collections) updateRename(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	return m, cmd
 }
 
-// updateSearch drives the filter input: live filtering while typing, enter
-// jumps to the selected match, esc restores the full tree.
 func (m Collections) updateSearch(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
@@ -516,7 +513,6 @@ func (n *node) matches(query string) bool {
 	return strings.Contains(strings.ToLower(n.pathLabel()), query)
 }
 
-// pathLabel renders the node's location like "api/users".
 func (n *node) pathLabel() string {
 	parts := append([]string{n.collection}, n.path...)
 	return strings.Join(parts, "/")

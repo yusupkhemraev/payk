@@ -28,7 +28,6 @@ import (
 	"github.com/yusupkhemraev/payk/internal/tui/theme"
 )
 
-// Config is the runtime configuration of the TUI.
 type Config struct {
 	// WorkspaceDir points at a .payk directory explicitly; empty means
 	// discover one from the working directory.
@@ -55,7 +54,6 @@ func (p pane) String() string {
 	return "unknown"
 }
 
-// Model is the root model composing the three panels and the status bar.
 type Model struct {
 	cfg   Config
 	theme *theme.Theme
@@ -130,7 +128,6 @@ func (m Model) Init() tea.Cmd {
 	return loadWorkspaceCmd(m.cfg)
 }
 
-// Update implements tea.Model; it only routes messages and tracks focus.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -285,7 +282,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleImportPromptKey answers the inline "import as request?" prompt.
 func (m Model) handleImportPromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	input := m.pendingImport
 	switch msg.String() {
@@ -314,8 +310,6 @@ func pasteKindLabel(name string) string {
 	}
 }
 
-// handleCmdlineKey drives the ":" command input while it is open: tab
-// accepts the highlighted completion, ctrl+n/p (or arrows) cycle.
 func (m Model) handleCmdlineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
@@ -531,8 +525,6 @@ func (m Model) unsetVariable(name string) (tea.Model, tea.Cmd) {
 	return m, saveEnvironmentsCmd(m.workspace, m.envs)
 }
 
-// reimport re-runs the recorded import source for one collection, or for
-// every collection that has one.
 func (m Model) reimport(args []string) (tea.Model, tea.Cmd) {
 	if m.workspace == nil {
 		m.setStatus("no workspace — nothing to reimport", true)
@@ -583,8 +575,6 @@ func (m Model) switchEnvironment(name string) (tea.Model, tea.Cmd) {
 	return m, saveEnvironmentsCmd(m.workspace, m.envs)
 }
 
-// syncEditorEnvironment feeds current variable names into the editor's
-// {{var}} completion.
 func (m *Model) syncEditorEnvironment() {
 	vars := m.activeVars()
 	names := make([]string, 0, len(vars))
@@ -605,7 +595,6 @@ func expandHome(path string) string {
 	return path
 }
 
-// osEnvNames returns sorted process environment variable names.
 func osEnvNames() []string {
 	environ := os.Environ()
 	names := make([]string, 0, len(environ))
@@ -638,7 +627,6 @@ func (m *Model) logMessage(msg string, isErr bool) {
 	}
 }
 
-// activeVars returns the vars of the active environment, or nil.
 func (m Model) activeVars() map[string]string {
 	if env := m.envs.ActiveEnv(); env != nil {
 		return env.Vars
@@ -952,9 +940,6 @@ func (m Model) helpAvail() (width, height int) {
 	return max(m.width-10, 20), max(m.height-statusBarHeight-8, 3)
 }
 
-// helpRows lays the enabled bindings out in as many aligned columns as the
-// terminal width allows, filling column-major. It returns the row lines and
-// how many of them fit on screen at once.
 func (m Model) helpRows() ([]string, int) {
 	var rendered []string
 	entryWidth := 0

@@ -20,7 +20,6 @@ const (
 	apiKeyVar   = "{{api_key}}"
 )
 
-// securityIndex resolves operation security requirements to schemes.
 type securityIndex struct {
 	schemes map[string]*v3.SecurityScheme
 	global  []*base.SecurityRequirement
@@ -39,8 +38,7 @@ func newSecurityIndex(doc *v3.Document) *securityIndex {
 	return idx
 }
 
-// apply fills the request's auth from the operation's effective security:
-// operation-level requirements override the global ones; an explicit empty
+// Operation-level requirements override the global ones; an explicit empty
 // list disables auth.
 func (idx *securityIndex) apply(req *core.Request, op *v3.Operation) {
 	requirements := idx.global
@@ -91,7 +89,6 @@ func (idx *securityIndex) applyScheme(req *core.Request, scheme *v3.SecuritySche
 	return false
 }
 
-// summary returns the placeholder variables that were applied, sorted.
 func (idx *securityIndex) summary() []string {
 	if len(idx.used) == 0 {
 		return nil

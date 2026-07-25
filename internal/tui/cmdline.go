@@ -12,8 +12,6 @@ type cmdSuggestion struct {
 	desc  string
 }
 
-// cmdLine is the vim-style ":" command input shown in place of the status
-// bar while active, with context-aware completion.
 type cmdLine struct {
 	input  textinput.Model
 	active bool

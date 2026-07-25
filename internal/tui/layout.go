@@ -1,6 +1,5 @@
 package tui
 
-// LayoutMode describes how many panes are visible at the current width.
 type LayoutMode int
 
 const (
@@ -28,8 +27,8 @@ type PanelSize struct {
 	Height int
 }
 
-// PanelSizes is the computed layout for one terminal size. A zero-size panel
-// is not visible in the current mode.
+// PanelSizes leaves a panel zero-sized when it is not visible in the current
+// mode.
 type PanelSizes struct {
 	Mode        LayoutMode
 	Collections PanelSize
@@ -50,8 +49,6 @@ type layoutOptions struct {
 	splitDelta int
 }
 
-// layout is the single place panel geometry is computed from the terminal
-// size.
 func layout(width, height int, opts layoutOptions) PanelSizes {
 	if width <= 0 || height <= statusBarHeight {
 		return PanelSizes{Mode: ModeSingle}

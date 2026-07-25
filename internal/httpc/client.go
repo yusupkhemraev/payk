@@ -21,8 +21,8 @@ import (
 // A var, not a const, so tests can lower it.
 var maxBodySize int64 = 20 << 20
 
-// Timings holds per-phase durations captured with httptrace. Phases that did
-// not happen (e.g. reused connection, plain HTTP) stay zero.
+// Timings leaves phases that did not happen (e.g. reused connection, plain
+// HTTP) at zero.
 type Timings struct {
 	DNS     time.Duration
 	Connect time.Duration
@@ -33,7 +33,6 @@ type Timings struct {
 	Total time.Duration
 }
 
-// Response is a fully read HTTP response with timing data.
 type Response struct {
 	Status     string
 	StatusCode int
@@ -105,8 +104,7 @@ func (t *tracer) clientTrace(start time.Time) *httptrace.ClientTrace {
 	}
 }
 
-// Send performs the request and reads the whole body. The context cancels
-// the request at any phase, including body download.
+// Send honors context cancellation at any phase, including body download.
 func Send(ctx context.Context, req *core.Request) (*Response, error) {
 	httpReq, err := buildRequest(ctx, req)
 	if err != nil {

@@ -154,7 +154,6 @@ func New(flavor catppuccin.Flavor) *Theme {
 	return t
 }
 
-// Default returns the Catppuccin Mocha theme.
 func Default() *Theme {
 	return New(catppuccin.Mocha)
 }
@@ -202,8 +201,6 @@ func (t *Theme) Status(code int) lipgloss.Style {
 	}
 }
 
-// ChromaStyle returns the chroma syntax highlighting style name matching the
-// current Catppuccin flavor.
 func (t *Theme) ChromaStyle() string {
 	return "catppuccin-" + t.Flavor.Name()
 }

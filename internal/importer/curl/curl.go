@@ -12,11 +12,9 @@ import (
 	"github.com/yusupkhemraev/payk/internal/core"
 )
 
-// CollectionName is the collection curl imports land in.
 const CollectionName = "imported"
 
-// Importer implements importer.Importer for curl command lines.
-// It is not safe for concurrent use: Warnings reports the last Import.
+// Importer is not safe for concurrent use: Warnings reports the last Import.
 type Importer struct {
 	warnings []string
 }
@@ -27,16 +25,13 @@ func New() *Importer {
 
 func (i *Importer) Name() string { return "curl" }
 
-// CanHandle reports whether the input looks like a curl command line.
 func (i *Importer) CanHandle(input string) bool {
 	trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), "$"))
 	return strings.HasPrefix(trimmed, "curl ") || trimmed == "curl"
 }
 
-// Warnings returns non-fatal issues from the last Import.
 func (i *Importer) Warnings() []string { return i.warnings }
 
-// Import parses the curl command into a collection with one request.
 func (i *Importer) Import(_ context.Context, input string) (*core.Collection, error) {
 	req, warnings, err := Parse(input)
 	i.warnings = warnings
@@ -46,7 +41,6 @@ func (i *Importer) Import(_ context.Context, input string) (*core.Collection, er
 	return &core.Collection{Name: CollectionName, Requests: []*core.Request{req}}, nil
 }
 
-// parser accumulates state while walking curl arguments.
 type parser struct {
 	req      core.Request
 	data     []string
@@ -55,7 +49,6 @@ type parser struct {
 	warnings []string
 }
 
-// Parse converts a curl command line into a request plus non-fatal warnings.
 func Parse(input string) (*core.Request, []string, error) {
 	args, err := tokenize(input)
 	if err != nil {
@@ -260,7 +253,6 @@ func detectBodyType(req *core.Request) string {
 	return "form"
 }
 
-// requestName derives a readable tree label like "GET /users/1".
 func requestName(req *core.Request) string {
 	u, err := url.Parse(req.URL)
 	if err != nil || u.Path == "" || u.Path == "/" {

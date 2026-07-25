@@ -121,8 +121,6 @@ func mergeEnvironments(ws *storage.Workspace, imported []core.Environment) (*cor
 	return envs, nil
 }
 
-// saveCollection persists every request of an imported collection, walking
-// nested folders.
 func saveCollection(ws *storage.Workspace, col *core.Collection) error {
 	for _, req := range col.Requests {
 		if err := ws.SaveRequest(col.Name, nil, req); err != nil {

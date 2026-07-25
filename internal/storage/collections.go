@@ -16,8 +16,8 @@ import (
 
 const yamlIndent = 2
 
-// LoadCollections reads the whole collections tree. A missing collections
-// directory yields an empty slice, not an error.
+// LoadCollections yields an empty slice, not an error, when the collections
+// directory is missing.
 func (w *Workspace) LoadCollections() ([]*core.Collection, error) {
 	entries, err := os.ReadDir(w.CollectionsDir())
 	if os.IsNotExist(err) {
@@ -79,10 +79,8 @@ func loadRequest(path string) (*core.Request, error) {
 	return &req, nil
 }
 
-// SaveRequest writes a request to <collections>/<collection>/<folders...>/,
-// creating directories as needed. The file name derives from the request
-// name; the marshaled key order is fixed by the struct, so repeated saves
-// produce identical bytes and clean diffs.
+// SaveRequest marshals with struct-fixed key order, so repeated saves produce
+// identical bytes and clean diffs.
 func (w *Workspace) SaveRequest(collection string, folders []string, req *core.Request) error {
 	dir := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -101,8 +99,6 @@ func (w *Workspace) SaveRequest(collection string, folders []string, req *core.R
 	return nil
 }
 
-// RenameRequest renames a request in place: the name field changes and the
-// file moves to the slug of the new name.
 func (w *Workspace) RenameRequest(collection string, folders []string, req *core.Request, newName string) error {
 	dir := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
 	oldPath := filepath.Join(dir, slug(req.Name)+".yaml")
@@ -120,8 +116,7 @@ func (w *Workspace) RenameRequest(collection string, folders []string, req *core
 	return nil
 }
 
-// RenameFolder renames a folder directory. An empty path renames the
-// collection itself.
+// RenameFolder renames the collection itself when the folder path is empty.
 func (w *Workspace) RenameFolder(collection string, folders []string, newName string) error {
 	parent := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
 	newPath := filepath.Join(filepath.Dir(parent), slug(newName))
@@ -145,8 +140,7 @@ func (w *Workspace) DeleteRequest(collection string, folders []string, req *core
 	return nil
 }
 
-// DeleteFolder removes a folder directory recursively. An empty path deletes
-// the whole collection.
+// DeleteFolder deletes the whole collection when the folder path is empty.
 func (w *Workspace) DeleteFolder(collection string, folders []string) error {
 	dir := filepath.Join(w.CollectionsDir(), collection, filepath.Join(folders...))
 	if err := os.RemoveAll(dir); err != nil {
@@ -155,8 +149,7 @@ func (w *Workspace) DeleteFolder(collection string, folders []string) error {
 	return nil
 }
 
-// importSourceFile records where a collection was imported from, enabling
-// re-imports. The name has no .yaml extension so the loader ignores it.
+// The name has no .yaml extension so the loader ignores it.
 const importSourceFile = ".import"
 
 func (w *Workspace) SaveImportSource(collection, source string) error {

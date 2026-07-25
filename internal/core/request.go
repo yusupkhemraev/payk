@@ -4,8 +4,8 @@ package core
 
 import "strings"
 
-// KV is an ordered name/value pair used for query params and headers.
-// A slice of KV keeps YAML output ordered and diff-friendly, unlike a map.
+// KV is an ordered slice element, not a map entry, so YAML output stays
+// ordered and diff-friendly.
 type KV struct {
 	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
@@ -22,7 +22,6 @@ func (b Body) IsZero() bool {
 	return b.Type == "" && b.Content == ""
 }
 
-// Auth types supported in the MVP.
 const (
 	AuthNone   = ""
 	AuthBearer = "bearer"
@@ -61,8 +60,6 @@ func (r *Request) Clone() *Request {
 	return &clone
 }
 
-// Normalize fills defaults: uppercase method, GET when method is empty, and
-// name as fallback for callers that loaded a request without one.
 func (r *Request) Normalize(fallbackName string) {
 	r.Method = strings.ToUpper(strings.TrimSpace(r.Method))
 	if r.Method == "" {

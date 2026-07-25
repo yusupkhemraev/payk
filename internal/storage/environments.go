@@ -9,8 +9,8 @@ import (
 	"github.com/yusupkhemraev/payk/internal/core"
 )
 
-// LoadEnvironments reads environments.yaml. A missing file yields an empty
-// config, not an error.
+// LoadEnvironments yields an empty config, not an error, when the file is
+// missing.
 func (w *Workspace) LoadEnvironments() (*core.Environments, error) {
 	data, err := os.ReadFile(w.EnvironmentsFile())
 	if os.IsNotExist(err) {
@@ -26,9 +26,9 @@ func (w *Workspace) LoadEnvironments() (*core.Environments, error) {
 	return &envs, nil
 }
 
-// SaveEnvironments writes environments.yaml. Var maps marshal with sorted
-// keys, so output is deterministic. Callers must never pass resolved
-// {{env:...}} secrets here; substitution happens only in memory at send time.
+// SaveEnvironments marshals var maps with sorted keys for deterministic
+// output. Callers must never pass resolved {{env:...}} secrets here;
+// substitution happens only in memory at send time.
 func (w *Workspace) SaveEnvironments(envs *core.Environments) error {
 	if err := os.MkdirAll(w.Dir, 0o755); err != nil {
 		return fmt.Errorf("storage: create workspace dir: %w", err)

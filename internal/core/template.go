@@ -12,7 +12,6 @@ var placeholderRe = regexp.MustCompile(`\{\{\s*([^{}\s][^{}]*?)\s*\}\}`)
 // instead of the active payk environment: {{env:API_TOKEN}}.
 const envPrefix = "env:"
 
-// resolver substitutes placeholders and records the ones it cannot resolve.
 type resolver struct {
 	vars      map[string]string
 	lookupEnv func(string) (string, bool)

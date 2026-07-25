@@ -7,7 +7,6 @@ import (
 
 const maxSuggestions = 6
 
-// suggestState is an open {{ completion at the cursor of a text input.
 type suggestState struct {
 	// start is the index right after the opening "{{".
 	start   int

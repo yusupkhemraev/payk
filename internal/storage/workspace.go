@@ -20,11 +20,9 @@ import (
 	"path/filepath"
 )
 
-// ErrNotFound is returned by Discover when no workspace exists.
 var ErrNotFound = errors.New("no payk workspace found")
 
 type Workspace struct {
-	// Dir is the workspace root, i.e. the .payk directory itself.
 	Dir string
 }
 
@@ -36,9 +34,6 @@ func (w *Workspace) EnvironmentsFile() string {
 	return filepath.Join(w.Dir, "environments.yaml")
 }
 
-// Discover finds the nearest workspace: it walks up from start looking for a
-// .payk directory, then falls back to the global workspace. Returns
-// ErrNotFound when neither exists.
 func Discover(start string) (*Workspace, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
@@ -67,7 +62,7 @@ func Discover(start string) (*Workspace, error) {
 	return nil, ErrNotFound
 }
 
-// globalDir returns ~/.config/payk without requiring it to exist.
+// Returns ~/.config/payk without requiring it to exist.
 func globalDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
