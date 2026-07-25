@@ -37,8 +37,8 @@ func TestResizeColumnsLayout(t *testing.T) {
 	if sizes.Collections.Width != base.Collections.Width+4 {
 		t.Errorf("sidebar width = %d, want %d", sizes.Collections.Width, base.Collections.Width+4)
 	}
-	if sizes.Collections.Width+sizes.Request.Width+sizes.Response.Width != 140 {
-		t.Error("pane widths must still sum to the terminal width")
+	if sizes.Collections.Width+sizes.Request.Width+sizes.Response.Width+2*separatorSize != 140 {
+		t.Error("panes plus rules must still cover the terminal width")
 	}
 
 	m = typeString(m, "<<")
@@ -62,8 +62,8 @@ func TestResizeColumnsLayout(t *testing.T) {
 	if sizes.Response.Width < minPaneWidth {
 		t.Errorf("response width = %d, must stay >= %d", sizes.Response.Width, minPaneWidth)
 	}
-	if sizes.Collections.Width+sizes.Request.Width+sizes.Response.Width != 140 {
-		t.Error("pane widths must still sum to the terminal width after clamping")
+	if sizes.Collections.Width+sizes.Request.Width+sizes.Response.Width+2*separatorSize != 140 {
+		t.Error("panes plus rules must still cover the terminal width after clamping")
 	}
 }
 
@@ -82,8 +82,8 @@ func TestResizeStackedLayout(t *testing.T) {
 		t.Errorf("stacked blocks share one width: %d vs %d",
 			base.Request.Width, base.Response.Width)
 	}
-	if base.Collections.Width+base.Request.Width != 140 {
-		t.Error("sidebar and stack must fill the terminal width")
+	if base.Collections.Width+base.Request.Width+separatorSize != 140 {
+		t.Error("sidebar, rule, and stack must fill the terminal width")
 	}
 
 	// Focused on the request block, > grows it and shrinks the response.
@@ -95,6 +95,9 @@ func TestResizeStackedLayout(t *testing.T) {
 	}
 	if sizes.Request.Height+sizes.Response.Height != base.Request.Height+base.Response.Height {
 		t.Error("block heights must still sum to the pane area")
+	}
+	if sizes.Request.Width != sizes.Response.Width {
+		t.Error("stacked blocks keep a shared width while resizing")
 	}
 
 	// Clamping keeps both blocks usable.

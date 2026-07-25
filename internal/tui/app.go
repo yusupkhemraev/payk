@@ -996,6 +996,21 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// vRule is the column drawn between side-by-side panes.
+func (m Model) vRule(height int) string {
+	rows := make([]string, height)
+	line := m.theme.Separator.Render("│")
+	for i := range rows {
+		rows[i] = line
+	}
+	return strings.Join(rows, "\n")
+}
+
+// hRule separates the stacked request and response blocks.
+func (m Model) hRule(width int) string {
+	return m.theme.Separator.Render(strings.Repeat("─", width))
+}
+
 func (m Model) panesView() string {
 	if m.zoomed {
 		switch m.focus {
@@ -1010,17 +1025,22 @@ func (m Model) panesView() string {
 
 	switch m.sizes.Mode {
 	case ModeStacked:
-		stack := lipgloss.JoinVertical(lipgloss.Left, m.request.View(), m.response.View())
+		stack := lipgloss.JoinVertical(lipgloss.Left,
+			m.request.View(),
+			m.hRule(m.sizes.Request.Width),
+			m.response.View())
 		if !m.sidebarVisible {
 			return stack
 		}
-		return lipgloss.JoinHorizontal(lipgloss.Top, m.collections.View(), stack)
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			m.collections.View(), m.vRule(m.sizes.Collections.Height), stack)
 
 	case ModeTriple:
+		rule := m.vRule(m.sizes.Request.Height)
 		return lipgloss.JoinHorizontal(
 			lipgloss.Top,
-			m.collections.View(),
-			m.request.View(),
+			m.collections.View(), rule,
+			m.request.View(), rule,
 			m.response.View(),
 		)
 
@@ -1030,9 +1050,11 @@ func (m Model) panesView() string {
 			main = m.response.View()
 		}
 		if m.sidebarVisible {
-			return lipgloss.JoinHorizontal(lipgloss.Top, m.collections.View(), main)
+			return lipgloss.JoinHorizontal(lipgloss.Top,
+				m.collections.View(), m.vRule(m.sizes.Collections.Height), main)
 		}
-		return lipgloss.JoinHorizontal(lipgloss.Top, m.request.View(), m.response.View())
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			m.request.View(), m.vRule(m.sizes.Request.Height), m.response.View())
 
 	default:
 		switch m.focus {

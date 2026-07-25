@@ -24,6 +24,8 @@ const (
 	statusBarHeight = 1
 	// topBarHeight covers the workspace line plus its rule.
 	topBarHeight = 2
+	// separatorSize is the rule drawn between neighbouring panes.
+	separatorSize = 1
 )
 
 // PanelSize is the outer box size of a panel, borders included.
@@ -79,37 +81,39 @@ func layout(width, height int, opts layoutOptions) PanelSizes {
 	paneHeight := height - statusBarHeight - topBarHeight
 
 	switch {
-	case opts.stacked && width >= doubleBreakpoint && paneHeight >= 2*minPaneHeight:
-		sidebar := 0
+	case opts.stacked && width >= doubleBreakpoint && paneHeight >= 2*minPaneHeight+separatorSize:
+		sidebar, sideRule := 0, 0
 		if opts.sidebarVisible {
 			sidebar = sidebarFor(width, opts)
+			sideRule = separatorSize
 		}
-		main := width - sidebar
-		requestHeight := clamp(paneHeight/2+opts.splitDelta,
-			minPaneHeight, paneHeight-minPaneHeight)
+		main := width - sidebar - sideRule
+
+		// One row goes to the rule between the stacked blocks.
+		stack := paneHeight - separatorSize
+		requestHeight := clamp(stack/2+opts.splitDelta, minPaneHeight, stack-minPaneHeight)
 		return PanelSizes{
 			Mode:        ModeStacked,
 			Collections: PanelSize{sidebar, paneHeight},
 			Request:     PanelSize{main, requestHeight},
-			Response:    PanelSize{main, paneHeight - requestHeight},
+			Response:    PanelSize{main, stack - requestHeight},
 		}
 
 	case width >= tripleBreakpoint:
 		sidebar := sidebarFor(width, opts)
-		request := clamp((width-sidebar)/2+opts.splitDelta,
-			minPaneWidth, width-sidebar-minPaneWidth)
-		response := width - sidebar - request
+		avail := width - sidebar - 2*separatorSize
+		request := clamp(avail/2+opts.splitDelta, minPaneWidth, avail-minPaneWidth)
 		return PanelSizes{
 			Mode:        ModeTriple,
 			Collections: PanelSize{sidebar, paneHeight},
 			Request:     PanelSize{request, paneHeight},
-			Response:    PanelSize{response, paneHeight},
+			Response:    PanelSize{avail - request, paneHeight},
 		}
 
 	case width >= doubleBreakpoint:
 		if opts.sidebarVisible {
 			sidebar := sidebarFor(width, opts)
-			main := width - sidebar
+			main := width - sidebar - separatorSize
 			return PanelSizes{
 				Mode:        ModeDouble,
 				Collections: PanelSize{sidebar, paneHeight},
@@ -117,12 +121,12 @@ func layout(width, height int, opts layoutOptions) PanelSizes {
 				Response:    PanelSize{main, paneHeight},
 			}
 		}
-		request := clamp(width/2+opts.splitDelta, minPaneWidth, width-minPaneWidth)
-		response := width - request
+		avail := width - separatorSize
+		request := clamp(avail/2+opts.splitDelta, minPaneWidth, avail-minPaneWidth)
 		return PanelSizes{
 			Mode:     ModeDouble,
 			Request:  PanelSize{request, paneHeight},
-			Response: PanelSize{response, paneHeight},
+			Response: PanelSize{avail - request, paneHeight},
 		}
 
 	default:

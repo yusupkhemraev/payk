@@ -27,20 +27,22 @@ func TestLayoutBreakpoints(t *testing.T) {
 	}
 }
 
-func TestLayoutTripleWidthsSumToTerminalWidth(t *testing.T) {
+func TestLayoutTripleWidthsFillTerminal(t *testing.T) {
 	for _, width := range []int{120, 137, 200} {
 		sizes := layout(width, 40, layoutOptions{sidebarVisible: true})
-		sum := sizes.Collections.Width + sizes.Request.Width + sizes.Response.Width
+		// Two rule columns sit between the three panes.
+		sum := sizes.Collections.Width + sizes.Request.Width + sizes.Response.Width +
+			2*separatorSize
 		if sum != width {
-			t.Errorf("width %d: pane widths sum to %d", width, sum)
+			t.Errorf("width %d: panes plus rules cover %d", width, sum)
 		}
 	}
 }
 
 func TestLayoutDoubleWidths(t *testing.T) {
 	sizes := layout(100, 30, layoutOptions{sidebarVisible: true})
-	if sizes.Collections.Width+sizes.Request.Width != 100 {
-		t.Errorf("sidebar visible: widths %d + %d don't sum to 100",
+	if sizes.Collections.Width+sizes.Request.Width+separatorSize != 100 {
+		t.Errorf("sidebar visible: widths %d + %d plus rule don't cover 100",
 			sizes.Collections.Width, sizes.Request.Width)
 	}
 
@@ -48,8 +50,8 @@ func TestLayoutDoubleWidths(t *testing.T) {
 	if sizes.Collections.Width != 0 {
 		t.Errorf("sidebar hidden: collections width = %d, want 0", sizes.Collections.Width)
 	}
-	if sizes.Request.Width+sizes.Response.Width != 100 {
-		t.Errorf("sidebar hidden: widths %d + %d don't sum to 100",
+	if sizes.Request.Width+sizes.Response.Width+separatorSize != 100 {
+		t.Errorf("sidebar hidden: widths %d + %d plus rule don't cover 100",
 			sizes.Request.Width, sizes.Response.Width)
 	}
 }
