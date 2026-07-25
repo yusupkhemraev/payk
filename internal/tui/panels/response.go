@@ -261,7 +261,24 @@ func (m *Response) bodyLines() []string {
 			lines[current] = m.theme.Selected.Render(m.activePlain()[current])
 		}
 	}
-	return m.wrapLines(lines, &m.lineOffsets)
+	return m.wrapLines(m.withGutter(lines), &m.lineOffsets)
+}
+
+// withGutter prefixes body lines with right-aligned line numbers.
+func (m *Response) withGutter(lines []string) []string {
+	if !m.lineNumbers || len(lines) == 0 {
+		return lines
+	}
+	width := len(fmt.Sprint(len(lines)))
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = m.theme.Gutter.Render(fmt.Sprintf("%*d", width, i+1)) + "  " + line
+	}
+	return out
+}
+
+func clampInt(v, lo, hi int) int {
+	return max(lo, min(v, hi))
 }
 
 func (m *Response) wrapLines(lines []string, offsets *[]int) []string {
@@ -658,13 +675,23 @@ func (m Response) buildTimingLines(resp *httpc.Response) []string {
 		{"TTFB", t.TTFB},
 		{"Total", t.Total},
 	}
+	// Bars are proportional to the total, so a slow phase is obvious at a
+	// glance instead of having to compare numbers.
+	total := max(float64(t.Total), 1)
+	barWidth := clampInt(m.width-34, 8, 28)
+
 	var lines []string
-	for _, row := range rows {
+	for i, row := range rows {
 		value := "—"
+		bar := m.theme.Gutter.Render(strings.Repeat("▬", barWidth))
 		if row.value > 0 {
 			value = formatDuration(row.value)
+			filled := clampInt(int(float64(row.value)/total*float64(barWidth)), 1, barWidth)
+			bar = m.theme.TimingPhase(i).Render(strings.Repeat("▬", filled)) +
+				m.theme.Gutter.Render(strings.Repeat("▬", barWidth-filled))
 		}
-		lines = append(lines, " "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", row.label))+" "+value)
+		lines = append(lines, fmt.Sprintf(" %s %s  %s",
+			m.theme.FieldLabel.Render(fmt.Sprintf("%-11s", row.label)), bar, value))
 	}
 	lines = append(lines, "",
 		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Size"))+" "+formatSize(resp.Size()),

@@ -15,6 +15,7 @@ import (
 type workspaceLoadedMsg struct {
 	prefs        config.Config
 	prefsErr     error
+	statuses     storage.StatusCache
 	workspace    *storage.Workspace
 	collections  []*core.Collection
 	environments *core.Environments
@@ -54,6 +55,7 @@ func loadWorkspaceCmd(cfg Config) tea.Cmd {
 		collections, err := ws.LoadCollections()
 		msg := workspaceLoadedMsg{workspace: ws, collections: collections, err: err}
 		msg.prefs, msg.prefsErr = config.Load(ws.Dir)
+		msg.statuses, _ = ws.LoadStatuses()
 		msg.environments, _ = ws.LoadEnvironments()
 		if msg.environments == nil {
 			msg.environments = &core.Environments{}

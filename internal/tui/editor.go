@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 
@@ -94,6 +95,18 @@ func createRequestCmd(ws *storage.Workspace, cfg Config, msg panels.CreateReques
 			path:       msg.Path,
 			name:       msg.Name,
 		}
+	}
+}
+
+// saveStatusesCmd persists the response status cache.
+func saveStatusesCmd(ws *storage.Workspace, statuses storage.StatusCache) tea.Cmd {
+	snapshot := make(storage.StatusCache, len(statuses))
+	maps.Copy(snapshot, statuses)
+	return func() tea.Msg {
+		if err := ws.SaveStatuses(snapshot); err != nil {
+			return panels.StatusNote{Text: "status cache: " + err.Error(), IsErr: true}
+		}
+		return nil
 	}
 }
 

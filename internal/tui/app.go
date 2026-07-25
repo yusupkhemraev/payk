@@ -93,6 +93,9 @@ type Model struct {
 	messages     []statusEntry
 	showMessages bool
 
+	// statuses caches the last response label per request for the tree.
+	statuses storage.StatusCache
+
 	importers []importer.Importer
 	// importSources caches collections with recorded import sources for
 	// :reimport completion; refreshed on every workspace load.
@@ -149,8 +152,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.prefsErr != nil {
 			m.logMessage(msg.prefsErr.Error(), true)
 		}
+		m.statuses = msg.statuses
 		m.applyPrefs(msg.prefs)
 		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
+		m.collections.SetStatuses(m.statuses, m.prefs.ShowStatusInTree)
 		m.syncEditorEnvironment()
 		return m, nil
 
@@ -282,7 +287,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logMessage(msg.err.Error(), true)
 		}
 		m.response.SetResponse(msg.label, msg.resp, msg.err)
-		return m, nil
+		return m, m.recordStatus(msg)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -863,6 +868,30 @@ func (m *Model) resizeFocused(delta int) {
 	m.applyLayout()
 }
 
+// recordStatus caches the response label for the request that was sent, so
+// the tree can show it, and persists the cache outside the YAML tree.
+func (m *Model) recordStatus(msg responseReceivedMsg) tea.Cmd {
+	req := m.request.CurrentRequest()
+	if req == nil {
+		return nil
+	}
+	label := "ERR"
+	if msg.err == nil && msg.resp != nil {
+		label = fmt.Sprint(msg.resp.StatusCode)
+	}
+
+	if m.statuses == nil {
+		m.statuses = storage.StatusCache{}
+	}
+	m.statuses[storage.StatusKey(m.selCollection, m.selPath, req.Name)] = label
+	m.collections.SetStatuses(m.statuses, m.prefs.ShowStatusInTree)
+
+	if m.workspace == nil {
+		return nil
+	}
+	return saveStatusesCmd(m.workspace, m.statuses)
+}
+
 // applyPrefs swaps in a new theme and layout without losing panel state.
 func (m *Model) applyPrefs(prefs config.Config) {
 	m.prefs = prefs
@@ -870,6 +899,7 @@ func (m *Model) applyPrefs(prefs config.Config) {
 	m.collections.SetTheme(m.theme)
 	m.request.SetTheme(m.theme)
 	m.response.SetTheme(m.theme, prefs.LineNumbers)
+	m.collections.SetStatuses(m.statuses, prefs.ShowStatusInTree)
 	m.applyLayout()
 }
 

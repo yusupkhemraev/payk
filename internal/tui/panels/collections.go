@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/tui/keymap"
@@ -100,6 +101,44 @@ type Collections struct {
 
 	// pendingDelete awaits y/n confirmation.
 	pendingDelete *node
+
+	// statuses maps a request key to its last response label; showStatus
+	// mirrors the config toggle.
+	statuses   map[string]string
+	showStatus bool
+}
+
+// SetStatuses supplies the last response label per request key.
+func (m *Collections) SetStatuses(statuses map[string]string, show bool) {
+	m.statuses = statuses
+	m.showStatus = show
+}
+
+// statusFor returns the cached response label for a request node.
+func (m Collections) statusFor(n *node) string {
+	if !m.showStatus || n.kind != nodeRequest || m.statuses == nil {
+		return ""
+	}
+	parts := append([]string{n.collection}, n.path...)
+	parts = append(parts, n.name)
+	return m.statuses[strings.Join(parts, "/")]
+}
+
+// statusStyle colors a cached label by its class.
+func (m Collections) statusStyle(label string) lipgloss.Style {
+	switch {
+	case label == "ERR":
+		return m.theme.Status(500)
+	case strings.HasPrefix(label, "2"):
+		return m.theme.Status(200)
+	case strings.HasPrefix(label, "3"):
+		return m.theme.Status(300)
+	case strings.HasPrefix(label, "4"):
+		return m.theme.Status(400)
+	case strings.HasPrefix(label, "5"):
+		return m.theme.Status(500)
+	}
+	return m.theme.Muted
 }
 
 func NewCollections(t *theme.Theme, keys keymap.KeyMap) Collections {
@@ -635,34 +674,54 @@ func (m Collections) renderRow(n *node, selected bool) string {
 		context = "  " + n.pathLabel()
 	}
 
+	inner := m.width - 2
+	status := m.statusFor(n)
+
 	// The selected row gets a single background style stretched across the
 	// panel; nested foreground styles would reset it mid-row, so it is
 	// built from plain text.
 	if selected {
 		label := " " + indent + n.plainLabel() + context
-		if pad := m.width - 2 - len([]rune(label)); pad > 0 {
-			label += strings.Repeat(" ", pad)
+		if status != "" {
+			return m.theme.Selected.Render(SplitRow(label, status+" ", inner))
 		}
-		return m.theme.Selected.Render(label)
+		return m.theme.Selected.Render(Pad(label, inner))
 	}
 
 	styledContext := ""
 	if context != "" {
 		styledContext = m.theme.Muted.Render(context)
 	}
+	styledStatus := ""
+	if status != "" {
+		styledStatus = m.statusStyle(status).Render(status) + " "
+	}
+
 	switch n.kind {
 	case nodeRequest:
 		badge := m.theme.Method(n.request.Method).Render(fmt.Sprintf("%-6s", n.request.Method))
-		return " " + indent + badge + " " + n.name + styledContext
+		row := " " + indent + badge + " " + n.name + styledContext
+		if styledStatus != "" {
+			return SplitRow(row, styledStatus, inner)
+		}
+		return row
 	case nodeCollection:
 		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
-		return " " + m.theme.Muted.Render(n.arrow()) + " " +
+		return " " + m.theme.Muted.Render(n.folderIcon(m.theme.Icons)) + " " +
 			m.theme.TreeCollection.Render(n.name) + count + styledContext
 	default:
 		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
-		return " " + m.theme.Muted.Render(indent+n.arrow()) + " " +
+		return " " + m.theme.Muted.Render(indent+n.folderIcon(m.theme.Icons)) + " " +
 			m.theme.TreeFolder.Render(n.name) + count + styledContext
 	}
+}
+
+// folderIcon picks the open/closed glyph for a collection or folder.
+func (n *node) folderIcon(icons theme.Icons) string {
+	if n.expanded {
+		return icons.FolderOpen
+	}
+	return icons.Folder
 }
 
 func (n *node) arrow() string {
