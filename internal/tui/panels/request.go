@@ -62,6 +62,12 @@ type Request struct {
 	envVars []string
 	osEnv   []string
 	suggest *suggestState
+
+	// collection/path locate the request for the breadcrumb; dirty tracks
+	// edits made since the last :w.
+	collection string
+	path       []string
+	dirty      bool
 }
 
 func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
@@ -98,6 +104,7 @@ func (m *Request) SetRequest(req *core.Request) {
 	m.row = 0
 	m.insert = false
 	m.suggest = nil
+	m.dirty = false
 }
 
 // SetEnvironment provides variable names for {{var}} completion: vars from
@@ -146,6 +153,7 @@ type EditBodyRequestedMsg struct {
 
 func (m *Request) SetBodyContent(content string) {
 	if m.req != nil {
+		m.dirty = true
 		m.req.Body.Content = content
 		if m.req.Body.Type == "" && content != "" {
 			m.req.Body.Type = "json"
@@ -237,6 +245,7 @@ func (m Request) formatBody() (Request, tea.Cmd) {
 		return m, noteCmd("body is not valid JSON: "+err.Error(), true)
 	}
 	m.req.Body.Content = pretty.String()
+	m.dirty = true
 	if m.req.Body.Type == "" {
 		m.req.Body.Type = "json"
 	}
@@ -244,6 +253,7 @@ func (m Request) formatBody() (Request, tea.Cmd) {
 }
 
 func (m Request) addRow() (Request, tea.Cmd) {
+	m.dirty = true
 	kv := core.KV{}
 	if m.tab == tabParams {
 		m.req.Params = append(m.req.Params, kv)
@@ -256,6 +266,7 @@ func (m Request) addRow() (Request, tea.Cmd) {
 }
 
 func (m *Request) deleteRow() {
+	m.dirty = true
 	kvs := m.currentKVs()
 	if m.row >= len(*kvs) {
 		return
@@ -278,6 +289,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 	case tabURL:
 		if m.row == 0 {
 			m.req.Method = cycle(methods, m.req.Method)
+			m.dirty = true
 			return m, nil
 		}
 		m.insert = true
@@ -299,6 +311,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 	case tabBody:
 		if m.row == 0 {
 			m.req.Body.Type = cycle(bodyTypes, m.req.Body.Type)
+			m.dirty = true
 			return m, nil
 		}
 		m.insert = true
@@ -308,6 +321,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 	case tabAuth:
 		if m.row == 0 {
 			m.req.Auth.Type = cycle(authTypes, m.req.Auth.Type)
+			m.dirty = true
 			m.row = 0
 			return m, nil
 		}
@@ -467,6 +481,7 @@ func (m Request) suggestionLine() string {
 }
 
 func (m *Request) commitInsert() {
+	m.dirty = true
 	switch m.tab {
 	case tabURL:
 		if m.row == 2 {
@@ -539,8 +554,45 @@ func cycle(values []string, current string) string {
 	return values[0]
 }
 
+// SetLocation records where the open request lives, for the breadcrumb.
+func (m *Request) SetLocation(collection string, path []string) {
+	m.collection = collection
+	m.path = path
+}
+
+// MarkDirty flags unsaved edits, shown in the breadcrumb and the tree.
+func (m *Request) MarkDirty(dirty bool) {
+	m.dirty = dirty
+}
+
+// Dirty reports whether the open request has unsaved edits.
+func (m *Request) Dirty() bool {
+	return m.dirty
+}
+
+// breadcrumb shows the open request's location plus an unsaved marker.
+func (m Request) breadcrumb() string {
+	if m.req == nil {
+		return ""
+	}
+	parts := append([]string{m.collection}, m.path...)
+	parts = append(parts, m.req.Name)
+	crumb := strings.Join(parts, " / ")
+	if m.dirty {
+		crumb += "  " + m.theme.Dirty.Render(m.dirtyMark())
+	}
+	return crumb
+}
+
+func (m Request) dirtyMark() string {
+	if mark := m.theme.Icons.Dirty; mark != "" {
+		return mark
+	}
+	return "*"
+}
+
 func (m Request) View() string {
-	return frame(m.theme, "Request", m.focused, m.width, m.height, m.body())
+	return frame(m.theme, "REQUEST", m.breadcrumb(), m.focused, m.width, m.height, m.body())
 }
 
 func (m Request) body() string {

@@ -32,6 +32,8 @@ type Config struct {
 	// WorkspaceDir points at a .payk directory explicitly; empty means
 	// discover one from the working directory.
 	WorkspaceDir string
+	// Version is shown in the top bar.
+	Version string
 }
 
 type pane int
@@ -146,6 +148,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panels.RequestSelectedMsg:
 		m.request.SetRequest(msg.Request)
+		m.request.SetLocation(msg.Collection, msg.Path)
 		m.selCollection = msg.Collection
 		m.selPath = msg.Path
 		return m, nil
@@ -154,6 +157,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.setStatus("write failed: "+msg.err.Error(), true)
 		} else {
+			m.request.MarkDirty(false)
 			m.setStatus("saved "+msg.name, false)
 		}
 		return m, nil
@@ -192,6 +196,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncEditorEnvironment()
 		if req := m.collections.SelectRequest(msg.collection, msg.path, msg.name); req != nil {
 			m.request.SetRequest(req)
+			m.request.SetLocation(msg.collection, msg.path)
 			m.selCollection = msg.collection
 			m.selPath = msg.path
 			m.focus = paneRequest
@@ -882,7 +887,8 @@ func (m Model) View() tea.View {
 		default:
 			content = m.panesView()
 		}
-		content = lipgloss.JoinVertical(lipgloss.Left, content, m.statusView())
+		content = lipgloss.JoinVertical(lipgloss.Left,
+			m.topBar(), content, m.statusView())
 	}
 
 	v := tea.NewView(content)
@@ -937,7 +943,7 @@ func (m Model) panesView() string {
 // helpAvail returns the inner space of the help overlay box: the terminal
 // minus status bar, box border, padding, title, and footer rows.
 func (m Model) helpAvail() (width, height int) {
-	return max(m.width-10, 20), max(m.height-statusBarHeight-8, 3)
+	return max(m.width-10, 20), max(m.height-statusBarHeight-topBarHeight-8, 3)
 }
 
 func (m Model) helpRows() ([]string, int) {
@@ -988,7 +994,7 @@ func (m Model) helpRows() ([]string, int) {
 
 func (m Model) helpView() string {
 	rows, visible := m.helpRows()
-	area := m.height - statusBarHeight
+	area := m.height - statusBarHeight - topBarHeight
 
 	scroll := min(max(m.helpScroll, 0), max(len(rows)-visible, 0))
 	shown := rows[scroll:min(scroll+visible, len(rows))]
@@ -1010,7 +1016,7 @@ func (m Model) helpView() string {
 // messagesView renders the full-text message log, newest last, wrapped to
 // the terminal width — the place to read what the status bar truncated.
 func (m Model) messagesView() string {
-	area := m.height - statusBarHeight
+	area := m.height - statusBarHeight - topBarHeight
 	innerWidth := max(m.width-8, 20)
 
 	var lines []string
@@ -1059,6 +1065,54 @@ func clampBlock(block string, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
+// mode names the current vim-style mode for the status bar badge.
+func (m Model) mode() string {
+	switch {
+	case m.cmdline.active:
+		return "COMMAND"
+	case m.focus == paneRequest && m.request.Editing():
+		return "INSERT"
+	case (m.focus == paneCollections && m.collections.Capturing()) ||
+		(m.focus == paneResponse && m.response.Searching()):
+		return "SEARCH"
+	default:
+		return "NORMAL"
+	}
+}
+
+func (m Model) versionLabel() string {
+	if m.cfg.Version == "" {
+		return "dev"
+	}
+	return m.cfg.Version
+}
+
+// topBar shows the workspace and active environment above the panes.
+func (m Model) topBar() string {
+	name := "no workspace"
+	if m.workspace != nil {
+		name = filepath.Base(filepath.Dir(m.workspace.Dir))
+		if name == "." || name == string(filepath.Separator) {
+			name = m.workspace.Dir
+		}
+	}
+
+	left := " " + m.theme.PaneActive.Render("payk") +
+		m.theme.Muted.Render("  ·  ") + lipgloss.NewStyle().Foreground(m.theme.Text).Render(name)
+	if m.envs != nil && m.envs.Active != "" {
+		env := m.envs.Active
+		if icon := m.theme.Icons.Env; icon != "" {
+			env = icon + " " + env
+		}
+		left += m.theme.Muted.Render("  ›  ") +
+			lipgloss.NewStyle().Foreground(m.theme.Flavor.Teal()).Render(env)
+	}
+
+	bar := m.theme.TopBar.Width(m.width).MaxWidth(m.width).
+		Render(panels.SplitRow(left, m.theme.Muted.Render(m.versionLabel()+" "), m.width))
+	return bar + "\n" + m.theme.Separator.Render(strings.Repeat("─", m.width))
+}
+
 func (m Model) statusView() string {
 	if m.pendingImport != "" {
 		prompt := m.theme.StatusBadge.Render("import") + " " +
@@ -1073,12 +1127,22 @@ func (m Model) statusView() string {
 		return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(line)
 	}
 
-	badge := m.theme.StatusBadge.Render("payk")
-	focus := m.theme.StatusFocus.Render(m.focus.String())
-
-	segments := []string{badge, focus}
+	segments := []string{m.theme.Mode(m.mode()).Render(m.mode())}
+	segments = append(segments, m.theme.StatusFocus.Render(m.focus.String()))
 	if m.envs.Active != "" {
-		segments = append(segments, m.theme.StatusFocus.Render("env:"+m.envs.Active))
+		env := "env:" + m.envs.Active
+		if icon := m.theme.Icons.Env; icon != "" {
+			env = icon + " " + env
+		}
+		segments = append(segments, m.theme.StatusFocus.Render(env))
+	}
+	if m.request.Dirty() {
+		mark := m.theme.Icons.Dirty
+		if mark == "" {
+			mark = "*"
+		}
+		segments = append(segments, m.theme.StatusBar.Render(" "+
+			m.theme.Dirty.Render(mark+" unsaved")+" "))
 	}
 	if m.zoomed {
 		segments = append(segments, m.theme.StatusFocus.Render("zoom"))

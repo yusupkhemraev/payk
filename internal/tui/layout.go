@@ -19,6 +19,8 @@ const (
 	sidebarMinWidth = 24
 
 	statusBarHeight = 1
+	// topBarHeight covers the workspace line plus its rule.
+	topBarHeight = 2
 )
 
 // PanelSize is the outer box size of a panel, borders included.
@@ -50,11 +52,11 @@ type layoutOptions struct {
 }
 
 func layout(width, height int, opts layoutOptions) PanelSizes {
-	if width <= 0 || height <= statusBarHeight {
+	if width <= 0 || height <= statusBarHeight+topBarHeight {
 		return PanelSizes{Mode: ModeSingle}
 	}
 
-	paneHeight := height - statusBarHeight
+	paneHeight := height - statusBarHeight - topBarHeight
 
 	switch {
 	case width >= tripleBreakpoint:

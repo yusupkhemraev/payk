@@ -54,10 +54,11 @@ func TestLayoutDoubleWidths(t *testing.T) {
 	}
 }
 
-func TestLayoutReservesStatusBarRow(t *testing.T) {
+func TestLayoutReservesChromeRows(t *testing.T) {
 	sizes := layout(120, 40, layoutOptions{sidebarVisible: true})
-	if sizes.Collections.Height != 39 {
-		t.Errorf("pane height = %d, want 39", sizes.Collections.Height)
+	// 40 rows minus the top bar (2) and the status bar (1).
+	if sizes.Collections.Height != 37 {
+		t.Errorf("pane height = %d, want 37", sizes.Collections.Height)
 	}
 }
 

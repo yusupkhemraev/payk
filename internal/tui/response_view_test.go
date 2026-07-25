@@ -20,7 +20,7 @@ func respondWith(t *testing.T, handler http.HandlerFunc) tea.Model {
 	t.Cleanup(srv.Close)
 
 	var m tea.Model = New(Config{WorkspaceDir: serverWorkspace(t, srv.URL)})
-	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
+	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 28})
 	m = runCmds(m, m.Init())
 	m = stepMsg(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -71,7 +71,7 @@ func TestHeadersTabScrolls(t *testing.T) {
 // collapseView strips layout noise so text split across wrapped lines can be
 // matched as one string.
 func collapseView(view string) string {
-	return strings.NewReplacer("\n", "", "│", "", " ", "").Replace(view)
+	return strings.NewReplacer("\n", "", "│", "", "▎", "", " ", "").Replace(view)
 }
 
 func TestBodyWrapToggle(t *testing.T) {

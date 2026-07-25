@@ -562,11 +562,11 @@ func (n *node) requestCount() int {
 }
 
 func (m Collections) View() string {
-	title := "Collections"
+	meta := ""
 	if total := m.totalRequests(); total > 0 {
-		title += " " + m.theme.TreeCount.Render(fmt.Sprintf("· %d", total))
+		meta = fmt.Sprintf("· %d", total)
 	}
-	return frame(m.theme, title, m.focused, m.width, m.height, m.body())
+	return frame(m.theme, "COLLECTIONS", meta, m.focused, m.width, m.height, m.body())
 }
 
 func (m Collections) totalRequests() int {

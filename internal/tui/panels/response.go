@@ -455,7 +455,11 @@ func (m *Response) cycleMatch(delta int) {
 }
 
 func (m Response) View() string {
-	return frame(m.theme, "Response", m.focused, m.width, m.height, m.body())
+	meta := ""
+	if pos := m.scrollIndicator(); pos != "" {
+		meta = strings.TrimPrefix(pos, "· ")
+	}
+	return frame(m.theme, "RESPONSE", meta, m.focused, m.width, m.height, m.body())
 }
 
 func (m Response) body() string {
@@ -517,16 +521,22 @@ func (m Response) searchLine() string {
 	return ""
 }
 
+// statusLine renders the status pill plus response metadata; scroll position
+// lives in the pane header instead.
 func (m Response) statusLine() string {
-	status := m.theme.Status(m.resp.StatusCode).Render(m.resp.Status)
-	meta := fmt.Sprintf("%s · %s · %s",
-		m.resp.Proto, formatSize(m.resp.Size()), formatDuration(m.resp.Timings.Total))
-	line := " " + status + " " + m.theme.Muted.Render(meta)
+	pill := m.theme.Status(m.resp.StatusCode).
+		Background(m.theme.Surface).
+		Render(" " + m.resp.Status + " ")
+	meta := fmt.Sprintf("%s  ·  %s  ·  %s",
+		formatDuration(m.resp.Timings.Total), formatSize(m.resp.Size()), m.resp.Proto)
+	line := " " + pill + "  " + m.theme.Muted.Render(meta)
 	if m.resp.Truncated {
-		line += " " + m.theme.Status(400).Render("(truncated)")
+		line += "  " + m.theme.Status(400).Render("truncated")
 	}
-	if pos := m.scrollIndicator(); pos != "" {
-		line += " " + m.theme.Muted.Render(pos)
+	if len(m.history) > 0 && m.theme.Icons.History != "" {
+		line = SplitRow(line,
+			m.theme.Muted.Render(fmt.Sprintf("%s %d", m.theme.Icons.History, len(m.history))),
+			m.width-2)
 	}
 	return line
 }

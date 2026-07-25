@@ -23,7 +23,7 @@ func TestResponseErrorWraps(t *testing.T) {
 	}
 
 	var m tea.Model = New(Config{WorkspaceDir: dir})
-	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 34})
 	m = runCmds(m, m.Init())
 	m = typeString(m, "j")
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})

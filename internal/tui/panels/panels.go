@@ -22,35 +22,62 @@ func noteCmd(text string, isErr bool) tea.Cmd {
 	return func() tea.Msg { return StatusNote{Text: text, IsErr: isErr} }
 }
 
-// frame renders a bordered panel box of exactly width x height with a title
-// row and body content, clipping overflow so resizing never breaks rendering.
-func frame(t *theme.Theme, title string, focused bool, width, height int, body string) string {
+// Pad extends a line to exactly w cells, truncating what does not fit.
+func Pad(s string, w int) string {
+	if d := w - ansi.StringWidth(s); d > 0 {
+		return s + strings.Repeat(" ", d)
+	}
+	return ansi.Truncate(s, w, "…")
+}
+
+// SplitRow puts left and right content on one line of width w, right-aligned.
+func SplitRow(left, right string, w int) string {
+	gap := w - ansi.StringWidth(left) - ansi.StringWidth(right)
+	if gap < 1 {
+		return Pad(left, w)
+	}
+	return left + strings.Repeat(" ", gap) + right
+}
+
+// frame renders a frameless pane of exactly width x height: an accent focus
+// bar on the left, a title row with an optional right-aligned meta, a rule,
+// and the body. Overflow is clipped so resizing never breaks rendering.
+func frame(t *theme.Theme, title, meta string, focused bool, width, height int, body string) string {
 	if width < 4 || height < 3 {
 		return ""
 	}
 
-	innerWidth := width - 2
-	innerHeight := height - 2
-
-	titleLine := ansi.Truncate(t.PanelTitle(focused).Render(title), innerWidth, "…")
-	separator := t.Separator.Render(strings.Repeat("─", innerWidth))
-
-	bodyLines := strings.Split(body, "\n")
-	if len(bodyLines) > innerHeight-2 {
-		bodyLines = bodyLines[:max(innerHeight-2, 0)]
-	}
-	for i, line := range bodyLines {
-		bodyLines[i] = ansi.Truncate(line, innerWidth, "…")
+	bar := " "
+	titleStyle := t.PaneTitle
+	if focused {
+		bar = t.FocusBar.Render("▎")
+		titleStyle = t.PaneActive
 	}
 
-	content := titleLine + "\n" + separator
-	if len(bodyLines) > 0 {
-		content += "\n" + strings.Join(bodyLines, "\n")
+	inner := width - 2
+	head := titleStyle.Render(title)
+	if meta != "" {
+		head = SplitRow(head, t.TreeCount.Render(meta), inner)
 	}
 
-	// lipgloss v2 Width/Height are the final block size, borders included.
-	return t.PanelBorder(focused).
-		Width(width).
-		Height(height).
-		Render(content)
+	content := []string{
+		ansi.Truncate(head, inner, "…"),
+		t.Separator.Render(strings.Repeat("─", inner)),
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if len(content) >= height {
+			break
+		}
+		content = append(content, ansi.Truncate(line, inner, "…"))
+	}
+
+	out := make([]string, height)
+	for i := range height {
+		line := ""
+		if i < len(content) {
+			line = content[i]
+		}
+		out[i] = bar + " " + Pad(line, inner)
+	}
+	return strings.Join(out, "\n")
 }

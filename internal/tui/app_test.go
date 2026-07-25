@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func waitForOutput(t *testing.T, tm *teatest.TestModel, markers ...string) {
 func TestStartupShowsAllPanesAndQuits(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 
-	waitForOutput(t, tm, "Collections", "Request", "Response", "payk")
+	waitForOutput(t, tm, "COLLECTIONS", "REQUEST", "RESPONSE", "payk")
 
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
@@ -46,7 +47,7 @@ func TestStartupShowsAllPanesAndQuits(t *testing.T) {
 
 func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "Collections")
+	waitForOutput(t, tm, "COLLECTIONS")
 
 	tm.Send(tea.WindowSizeMsg{Width: 60, Height: 20})
 	waitForOutput(t, tm, "payk")
@@ -60,28 +61,30 @@ func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
 
 func TestHelpOverlayTogglesOpenAndClosed(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "Collections")
+	waitForOutput(t, tm, "COLLECTIONS")
 
 	tm.Send(keyPress('?'))
 	waitForOutput(t, tm, "keybindings")
 
 	tm.Send(keyPress('?'))
-	waitForOutput(t, tm, "Collections")
+	waitForOutput(t, tm, "COLLECTIONS")
 
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
 }
 
+// Checked synchronously: the terminal diff only emits changed characters, so
+// consecutive focus names ("request" → "response") never appear in full in
+// the raw output stream.
 func TestFocusSwitchingUpdatesStatusBar(t *testing.T) {
-	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "collections")
+	var m tea.Model = New(testConfig(t))
+	m = stepMsg(m, tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = runCmds(m, m.Init())
 
-	tm.Send(keyPress('l'))
-	waitForOutput(t, tm, "request")
-
-	tm.Send(keyPress('l'))
-	waitForOutput(t, tm, "response")
-
-	tm.Send(keyPress('q'))
-	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
+	for _, want := range []string{"collections", "request", "response"} {
+		if !strings.Contains(plainView(m), " "+want+" ") {
+			t.Errorf("status bar should show focus %q:\n%s", want, plainView(m))
+		}
+		m = typeString(m, "l")
+	}
 }
