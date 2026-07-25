@@ -681,7 +681,7 @@ func (m Collections) renderRow(n *node, selected bool) string {
 	// panel; nested foreground styles would reset it mid-row, so it is
 	// built from plain text.
 	if selected {
-		label := " " + indent + n.plainLabel() + context
+		label := " " + indent + n.plainLabel(m.theme.Icons) + context
 		if status != "" {
 			return m.theme.Selected.Render(SplitRow(label, status+" ", inner))
 		}
@@ -724,16 +724,9 @@ func (n *node) folderIcon(icons theme.Icons) string {
 	return icons.Folder
 }
 
-func (n *node) arrow() string {
-	if n.expanded {
-		return "▾"
-	}
-	return "▸"
-}
-
-func (n *node) plainLabel() string {
+func (n *node) plainLabel(icons theme.Icons) string {
 	if n.kind == nodeRequest {
 		return fmt.Sprintf("%-6s %s", n.request.Method, n.name)
 	}
-	return fmt.Sprintf("%s %s · %d", n.arrow(), n.name, n.requestCount())
+	return fmt.Sprintf("%s %s · %d", n.folderIcon(icons), n.name, n.requestCount())
 }
