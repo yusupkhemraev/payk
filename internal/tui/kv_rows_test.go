@@ -13,7 +13,8 @@ func TestAddMultipleHeaderRows(t *testing.T) {
 	m = stepMsg(m, tea.WindowSizeMsg{Width: 140, Height: 30})
 	m = runCmds(m, m.Init())
 
-	// Open ping, focus the editor, go to the Headers tab.
+	// Open ping, focus the editor, go to the Headers tab (Body · Params ·
+	// Headers).
 	m = typeString(m, "G")
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = typeString(m, "l")

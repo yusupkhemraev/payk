@@ -40,9 +40,9 @@ func TestURLCompletionFromEnvironment(t *testing.T) {
 	// Tab accepts the completion into the input.
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEscape})
-	view = plainView(m)
-	if !strings.Contains(view, "url     {{base_url}}") {
-		t.Errorf("completed URL not committed:\n%s", view)
+	model := m.(Model)
+	if got := model.request.CurrentRequest().URL; got != "{{base_url}}" {
+		t.Errorf("completed URL not committed, got %q", got)
 	}
 }
 

@@ -946,7 +946,7 @@ func (m *Model) applyPrefs(prefs config.Config) {
 	m.prefs = prefs
 	m.theme = theme.FromConfig(prefs)
 	m.collections.SetTheme(m.theme)
-	m.request.SetTheme(m.theme)
+	m.request.SetTheme(m.theme, prefs.LineNumbers)
 	m.response.SetTheme(m.theme, prefs.LineNumbers)
 	m.collections.SetStatuses(m.statuses, prefs.ShowStatusInTree)
 	m.applyLayout()

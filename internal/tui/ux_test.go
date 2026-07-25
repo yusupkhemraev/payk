@@ -148,9 +148,8 @@ func TestFormatJSONBody(t *testing.T) {
 	m = typeString(m, "j")
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	// Focus editor, go to Body tab, format.
+	// Focus the editor: Body is the first tab, so f formats right away.
 	m = typeString(m, "l")
-	m = typeString(m, "]]]")
 	m = typeString(m, "f")
 
 	view := plainView(m)

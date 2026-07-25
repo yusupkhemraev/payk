@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2/quick"
 
 	"github.com/yusupkhemraev/payk/internal/core"
@@ -20,14 +21,18 @@ import (
 type editorTab int
 
 const (
-	tabURL editorTab = iota
+	tabBody editorTab = iota
 	tabParams
 	tabHeaders
-	tabBody
 	tabAuth
+	tabInfo
 )
 
-var editorTabNames = []string{"URL", "Params", "Headers", "Body", "Auth"}
+var editorTabNames = []string{"Body", "Params", "Headers", "Auth", "Info"}
+
+// urlRows are the method and URL: they live on the line above the tabs and
+// stay reachable whichever tab is open, so rows 0 and 1 always mean them.
+const urlRows = 2
 
 var methods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 
@@ -57,6 +62,7 @@ type Request struct {
 	kvField   int
 	bodyArea  textarea.Model
 	authInput textinput.Model
+	infoInput textinput.Model
 
 	// envVars/osEnv feed {{var}} completion in insert mode.
 	envVars []string
@@ -68,6 +74,8 @@ type Request struct {
 	collection string
 	path       []string
 	dirty      bool
+	// lineNumbers mirrors the config toggle for the body gutter.
+	lineNumbers bool
 }
 
 func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
@@ -85,6 +93,10 @@ func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
 	auth := textinput.New()
 	auth.Prompt = ""
 
+	info := textinput.New()
+	info.Prompt = ""
+	info.Placeholder = "what this request does"
+
 	body := textarea.New()
 
 	return Request{
@@ -95,17 +107,19 @@ func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
 		kvValue:   value,
 		bodyArea:  body,
 		authInput: auth,
+		infoInput: info,
 	}
 }
 
 // SetTheme swaps the theme after a config reload.
-func (m *Request) SetTheme(t *theme.Theme) {
+func (m *Request) SetTheme(t *theme.Theme, lineNumbers bool) {
 	m.theme = t
+	m.lineNumbers = lineNumbers
 }
 
 func (m *Request) SetRequest(req *core.Request) {
 	m.req = req
-	m.tab = tabURL
+	m.tab = tabBody
 	m.row = 0
 	m.insert = false
 	m.suggest = nil
@@ -167,15 +181,19 @@ func (m *Request) SetBodyContent(content string) {
 }
 
 func (m *Request) rows() int {
+	return urlRows + m.tabRows()
+}
+
+func (m *Request) tabRows() int {
 	switch m.tab {
-	case tabURL:
-		return 3 // method, url, description
 	case tabParams:
 		return len(m.req.Params)
 	case tabHeaders:
 		return len(m.req.Headers)
 	case tabBody:
 		return 2 // type, content
+	case tabInfo:
+		return 1 // description
 	case tabAuth:
 		switch m.req.Auth.Type {
 		case core.AuthBearer:
@@ -187,6 +205,16 @@ func (m *Request) rows() int {
 		}
 	}
 	return 0
+}
+
+// onURLRow reports whether the selection sits on the method or URL line.
+func (m *Request) onURLRow() bool {
+	return m.row < urlRows
+}
+
+// tabRow is the selection index within the open tab.
+func (m *Request) tabRow() int {
+	return m.row - urlRows
 }
 
 func (m Request) Update(msg tea.Msg) (Request, tea.Cmd) {
@@ -205,11 +233,11 @@ func (m Request) Update(msg tea.Msg) (Request, tea.Cmd) {
 	switch {
 	case key.Matches(keyMsg, m.keys.TabNext):
 		m.tab = editorTab((int(m.tab) + 1) % len(editorTabNames))
-		m.row = 0
+		m.row = urlRows
 
 	case key.Matches(keyMsg, m.keys.TabPrev):
 		m.tab = editorTab((int(m.tab) + len(editorTabNames) - 1) % len(editorTabNames))
-		m.row = 0
+		m.row = urlRows
 
 	case key.Matches(keyMsg, m.keys.Down):
 		if m.row < m.rows()-1 {
@@ -262,10 +290,10 @@ func (m Request) addRow() (Request, tea.Cmd) {
 	kv := core.KV{}
 	if m.tab == tabParams {
 		m.req.Params = append(m.req.Params, kv)
-		m.row = len(m.req.Params) - 1
+		m.row = urlRows + len(m.req.Params) - 1
 	} else {
 		m.req.Headers = append(m.req.Headers, kv)
-		m.row = len(m.req.Headers) - 1
+		m.row = urlRows + len(m.req.Headers) - 1
 	}
 	return m.startKVInsert()
 }
@@ -273,11 +301,12 @@ func (m Request) addRow() (Request, tea.Cmd) {
 func (m *Request) deleteRow() {
 	m.dirty = true
 	kvs := m.currentKVs()
-	if m.row >= len(*kvs) {
+	row := m.tabRow()
+	if row < 0 || row >= len(*kvs) {
 		return
 	}
-	*kvs = append((*kvs)[:m.row], (*kvs)[m.row+1:]...)
-	if m.row >= len(*kvs) && m.row > 0 {
+	*kvs = append((*kvs)[:row], (*kvs)[row+1:]...)
+	if row >= len(*kvs) && m.row > urlRows {
 		m.row--
 	}
 }
@@ -290,23 +319,20 @@ func (m *Request) currentKVs() *[]core.KV {
 }
 
 func (m Request) activateRow() (Request, tea.Cmd) {
-	switch m.tab {
-	case tabURL:
+	if m.onURLRow() {
 		if m.row == 0 {
 			m.req.Method = cycle(methods, m.req.Method)
 			m.dirty = true
 			return m, nil
 		}
 		m.insert = true
-		if m.row == 2 {
-			m.urlInput.SetValue(m.req.Description)
-		} else {
-			m.urlInput.SetValue(m.req.URL)
-		}
+		m.urlInput.SetValue(m.req.URL)
 		m.urlInput.CursorEnd()
 		m.refreshSuggestions()
 		return m, m.urlInput.Focus()
+	}
 
+	switch m.tab {
 	case tabParams, tabHeaders:
 		if len(*m.currentKVs()) == 0 {
 			return m.addRow()
@@ -314,7 +340,7 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 		return m.startKVInsert()
 
 	case tabBody:
-		if m.row == 0 {
+		if m.tabRow() == 0 {
 			m.req.Body.Type = cycle(bodyTypes, m.req.Body.Type)
 			m.dirty = true
 			return m, nil
@@ -323,11 +349,17 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 		m.bodyArea.SetValue(m.req.Body.Content)
 		return m, m.bodyArea.Focus()
 
+	case tabInfo:
+		m.insert = true
+		m.infoInput.SetValue(m.req.Description)
+		m.infoInput.CursorEnd()
+		return m, m.infoInput.Focus()
+
 	case tabAuth:
-		if m.row == 0 {
+		if m.tabRow() == 0 {
 			m.req.Auth.Type = cycle(authTypes, m.req.Auth.Type)
 			m.dirty = true
-			m.row = 0
+			m.row = urlRows
 			return m, nil
 		}
 		m.insert = true
@@ -341,14 +373,14 @@ func (m Request) activateRow() (Request, tea.Cmd) {
 
 func (m Request) startKVInsert() (Request, tea.Cmd) {
 	kvs := *m.currentKVs()
-	if m.row >= len(kvs) {
+	if m.tabRow() >= len(kvs) {
 		return m, nil
 	}
 	m.insert = true
 	m.kvField = 0
-	m.kvName.SetValue(kvs[m.row].Name)
+	m.kvName.SetValue(kvs[m.tabRow()].Name)
 	m.kvName.CursorEnd()
-	m.kvValue.SetValue(kvs[m.row].Value)
+	m.kvValue.SetValue(kvs[m.tabRow()].Value)
 	m.kvValue.CursorEnd()
 	m.kvValue.Blur()
 	m.refreshSuggestions()
@@ -392,22 +424,28 @@ func (m Request) updateInsert(msg tea.Msg) (Request, tea.Cmd) {
 		case (m.tab == tabParams || m.tab == tabHeaders) && keyMsg.Code == tea.KeyEnter:
 			m.commitInsert()
 			kvs := *m.currentKVs()
-			if m.row == len(kvs)-1 && m.row < len(kvs) &&
-				(kvs[m.row].Name != "" || kvs[m.row].Value != "") {
+			row := m.tabRow()
+			if row == len(kvs)-1 && row >= 0 &&
+				(kvs[row].Name != "" || kvs[row].Value != "") {
 				return m.addRow()
 			}
 			return m, nil
 
-		case m.tab != tabBody && keyMsg.Code == tea.KeyEnter:
+		case (m.onURLRow() || m.tab != tabBody) && keyMsg.Code == tea.KeyEnter:
 			m.commitInsert()
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
-	switch m.tab {
-	case tabURL:
+	if m.onURLRow() {
 		m.urlInput, cmd = m.urlInput.Update(msg)
+		m.refreshSuggestions()
+		return m, cmd
+	}
+	switch m.tab {
+	case tabInfo:
+		m.infoInput, cmd = m.infoInput.Update(msg)
 	case tabParams, tabHeaders:
 		if m.kvField == 0 {
 			m.kvName, cmd = m.kvName.Update(msg)
@@ -426,9 +464,10 @@ func (m Request) updateInsert(msg tea.Msg) (Request, tea.Cmd) {
 // activeInput returns the focused textinput of the current insert session,
 // or nil for the body textarea (no completion there).
 func (m *Request) activeInput() *textinput.Model {
-	switch m.tab {
-	case tabURL:
+	if m.onURLRow() {
 		return &m.urlInput
+	}
+	switch m.tab {
 	case tabParams, tabHeaders:
 		if m.kvField == 0 {
 			return &m.kvName
@@ -487,27 +526,30 @@ func (m Request) suggestionLine() string {
 
 func (m *Request) commitInsert() {
 	m.dirty = true
+	if m.onURLRow() {
+		m.req.URL = strings.TrimSpace(m.urlInput.Value())
+		m.finishInsert()
+		return
+	}
+
 	switch m.tab {
-	case tabURL:
-		if m.row == 2 {
-			m.req.Description = strings.TrimSpace(m.urlInput.Value())
-		} else {
-			m.req.URL = strings.TrimSpace(m.urlInput.Value())
-		}
+	case tabInfo:
+		m.req.Description = strings.TrimSpace(m.infoInput.Value())
 	case tabParams, tabHeaders:
 		kvs := m.currentKVs()
-		if m.row < len(*kvs) {
+		row := m.tabRow()
+		if row >= 0 && row < len(*kvs) {
 			kv := core.KV{
 				Name:  strings.TrimSpace(m.kvName.Value()),
 				Value: m.kvValue.Value(),
 			}
 			if kv.Name == "" && kv.Value == "" {
-				*kvs = append((*kvs)[:m.row], (*kvs)[m.row+1:]...)
-				if m.row > 0 {
+				*kvs = append((*kvs)[:row], (*kvs)[row+1:]...)
+				if m.row > urlRows {
 					m.row--
 				}
 			} else {
-				(*kvs)[m.row] = kv
+				(*kvs)[row] = kv
 			}
 		}
 	case tabBody:
@@ -518,7 +560,10 @@ func (m *Request) commitInsert() {
 	case tabAuth:
 		m.setAuthValue(strings.TrimSpace(m.authInput.Value()))
 	}
+	m.finishInsert()
+}
 
+func (m *Request) finishInsert() {
 	m.insert = false
 	m.suggest = nil
 	m.urlInput.Blur()
@@ -526,13 +571,14 @@ func (m *Request) commitInsert() {
 	m.kvValue.Blur()
 	m.bodyArea.Blur()
 	m.authInput.Blur()
+	m.infoInput.Blur()
 }
 
 func (m *Request) authValue() string {
 	switch {
 	case m.req.Auth.Type == core.AuthBearer:
 		return m.req.Auth.Token
-	case m.row == 1:
+	case m.tabRow() == 1:
 		return m.req.Auth.User
 	default:
 		return m.req.Auth.Pass
@@ -543,7 +589,7 @@ func (m *Request) setAuthValue(v string) {
 	switch {
 	case m.req.Auth.Type == core.AuthBearer:
 		m.req.Auth.Token = v
-	case m.row == 1:
+	case m.tabRow() == 1:
 		m.req.Auth.User = v
 	default:
 		m.req.Auth.Pass = v
@@ -606,11 +652,10 @@ func (m Request) body() string {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", m.tabBar())
+	m.renderURLLine(&b)
+	fmt.Fprintf(&b, "\n%s\n\n", m.tabBar())
 
 	switch m.tab {
-	case tabURL:
-		m.renderURLTab(&b)
 	case tabParams:
 		m.renderKVTab(&b, m.req.Params, "params — a to add")
 	case tabHeaders:
@@ -619,6 +664,8 @@ func (m Request) body() string {
 		m.renderBodyTab(&b)
 	case tabAuth:
 		m.renderAuthTab(&b)
+	case tabInfo:
+		m.renderInfoTab(&b)
 	}
 
 	fmt.Fprintf(&b, "\n%s", m.theme.Muted.Render(" "+m.hint()))
@@ -635,7 +682,7 @@ func (m Request) hint() string {
 		}
 		return "{{ vars · esc done"
 	}
-	return "[ ] tabs · i edit · space send"
+	return "j/k rows · [ ] tabs · i edit · space send"
 }
 
 func (m Request) tabBar() string {
@@ -645,13 +692,31 @@ func (m Request) tabBar() string {
 		if editorTab(i) == m.tab {
 			style = m.theme.TabActive
 		}
-		parts = append(parts, style.Render(name))
+		label := style.Render(name)
+		if count := m.tabCount(editorTab(i)); count > 0 {
+			label += " " + m.theme.Badge.Render(fmt.Sprint(count))
+		}
+		parts = append(parts, label)
 	}
-	return " " + strings.Join(parts, m.theme.TabInactive.Render(" · "))
+	return " " + strings.Join(parts, m.theme.TabInactive.Render("  ·  "))
+}
+
+// tabCount is the badge next to a tab name, 0 for tabs without one.
+func (m Request) tabCount(tab editorTab) int {
+	if m.req == nil {
+		return 0
+	}
+	switch tab {
+	case tabParams:
+		return len(m.req.Params)
+	case tabHeaders:
+		return len(m.req.Headers)
+	}
+	return 0
 }
 
 func (m Request) renderField(b *strings.Builder, row int, label, value string) {
-	selected := m.focused && !m.insert && m.row == row
+	selected := m.selectedRow(row)
 	line := fmt.Sprintf("%-7s %s", label, value)
 	if selected {
 		fmt.Fprintf(b, "%s\n", m.theme.Selected.Render(" "+line+" "))
@@ -660,26 +725,92 @@ func (m Request) renderField(b *strings.Builder, row int, label, value string) {
 	fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-7s", label)), value)
 }
 
-func (m Request) renderURLTab(b *strings.Builder) {
-	m.renderField(b, 0, "method", m.req.Method)
-
-	if m.insert && m.row == 1 {
-		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("url    "), m.urlInput.View())
-		m.renderSuggestions(b)
+// renderURLLine draws the method and URL above the tabs, with {{vars}} as
+// chips and the send hint on the right.
+func (m Request) renderURLLine(b *strings.Builder) {
+	method := m.theme.Method(m.req.Method).Render(m.req.Method)
+	if m.selectedRow(0) {
+		method = m.theme.Selected.Render(" " + m.req.Method + " ")
 	} else {
-		m.renderField(b, 1, "url", m.req.URL)
+		method = " " + method
 	}
 
+	if m.insert && m.onURLRow() {
+		fmt.Fprintf(b, "%s  %s\n", method, m.urlInput.View())
+		m.renderSuggestions(b)
+		return
+	}
+
+	url := m.renderChips(m.req.URL)
+	if url == "" {
+		url = m.theme.Muted.Render("(no url — press enter)")
+	}
+	if m.selectedRow(1) {
+		url = m.theme.Selected.Render(" " + m.req.URL + " ")
+	}
+
+	line := method + "  " + url
+	if hint := m.sendHint(); hint != "" {
+		line = SplitRow(line, hint, m.width-2)
+	}
+	fmt.Fprintf(b, "%s\n", line)
+}
+
+// renderChips renders {{var}} placeholders as subtle pills so a URL reads
+// as tokens instead of braces.
+func (m Request) renderChips(s string) string {
+	if s == "" {
+		return ""
+	}
+	var out strings.Builder
+	rest := s
+	for {
+		open := strings.Index(rest, "{{")
+		if open < 0 {
+			break
+		}
+		close := strings.Index(rest[open:], "}}")
+		if close < 0 {
+			break
+		}
+		close += open
+		out.WriteString(m.theme.Muted.Render(rest[:open]))
+		out.WriteString(m.theme.Chip.Render(" " + rest[open+2:close] + " "))
+		rest = rest[close+2:]
+	}
+	out.WriteString(lipgloss.NewStyle().Foreground(m.theme.Text).Render(rest))
+	return out.String()
+}
+
+func (m Request) sendHint() string {
+	if m.insert {
+		return ""
+	}
+	icon := m.theme.Icons.Send
+	if icon == "" {
+		return m.theme.Muted.Render("space send")
+	}
+	return lipgloss.NewStyle().Foreground(m.theme.Flavor.Green()).Render(icon + " space")
+}
+
+// selectedRow reports whether an absolute row is the highlighted one.
+func (m Request) selectedRow(row int) bool {
+	return m.focused && !m.insert && m.row == row
+}
+
+func (m Request) renderInfoTab(b *strings.Builder) {
+	fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-7s", "name")), m.req.Name)
+	if m.insert {
+		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-7s", "desc")), m.infoInput.View())
+		return
+	}
 	desc := m.req.Description
 	if desc == "" {
 		desc = m.theme.Muted.Render("(none)")
 	}
-	if m.insert && m.row == 2 {
-		fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("desc   "), m.urlInput.View())
-		m.renderSuggestions(b)
-	} else {
-		m.renderField(b, 2, "desc", desc)
-	}
+	m.renderField(b, urlRows, "desc", desc)
+	fmt.Fprintf(b, "\n %s %s\n", m.theme.FieldLabel.Render(fmt.Sprintf("%-7s", "path")),
+		m.theme.Muted.Render(strings.Join(append([]string{m.collection}, m.path...), "/")))
 }
 
 func (m Request) renderSuggestions(b *strings.Builder) {
@@ -694,12 +825,12 @@ func (m Request) renderKVTab(b *strings.Builder, kvs []core.KV, emptyHint string
 		return
 	}
 	for i, kv := range kvs {
-		if m.insert && i == m.row {
+		if m.insert && i == m.tabRow() {
 			fmt.Fprintf(b, " %s = %s\n", m.kvName.View(), m.kvValue.View())
 			m.renderSuggestions(b)
 			continue
 		}
-		selected := m.focused && !m.insert && m.row == i
+		selected := m.selectedRow(urlRows + i)
 		line := fmt.Sprintf("%s = %s", kv.Name, kv.Value)
 		if selected {
 			fmt.Fprintf(b, "%s\n", m.theme.Selected.Render(" "+line+" "))
@@ -714,18 +845,30 @@ func (m Request) renderBodyTab(b *strings.Builder) {
 	if bodyType == "" {
 		bodyType = "none"
 	}
-	m.renderField(b, 0, "type", bodyType)
+	m.renderField(b, urlRows, "type", bodyType)
 	if m.insert {
 		fmt.Fprintf(b, "%s\n", m.bodyArea.View())
 		return
 	}
 	if m.req.Body.Content == "" {
-		m.renderField(b, 1, "content", m.theme.Muted.Render("(empty — enter to edit)"))
+		m.renderField(b, urlRows+1, "content", m.theme.Muted.Render("(empty — enter to edit)"))
 		return
 	}
-	m.renderField(b, 1, "content", "")
-	for line := range strings.SplitSeq(m.bodyPreview(), "\n") {
-		fmt.Fprintf(b, "   %s\n", line)
+	if m.selectedRow(urlRows + 1) {
+		fmt.Fprintf(b, "%s\n", m.theme.Selected.Render(" content "))
+	} else {
+		fmt.Fprintf(b, "\n")
+	}
+
+	lines := strings.Split(m.bodyPreview(), "\n")
+	width := len(fmt.Sprint(len(lines)))
+	for i, line := range lines {
+		if m.lineNumbers {
+			fmt.Fprintf(b, " %s  %s\n",
+				m.theme.Gutter.Render(fmt.Sprintf("%*d", width, i+1)), line)
+		} else {
+			fmt.Fprintf(b, "   %s\n", line)
+		}
 	}
 }
 
@@ -751,7 +894,7 @@ func (m Request) renderAuthTab(b *strings.Builder) {
 	if authType == core.AuthNone {
 		authType = "none"
 	}
-	m.renderField(b, 0, "type", authType)
+	m.renderField(b, urlRows, "type", authType)
 
 	switch m.req.Auth.Type {
 	case core.AuthBearer:
@@ -759,20 +902,20 @@ func (m Request) renderAuthTab(b *strings.Builder) {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("token  "), m.authInput.View())
 			m.renderSuggestions(b)
 		} else {
-			m.renderField(b, 1, "token", m.req.Auth.Token)
+			m.renderField(b, urlRows+1, "token", m.req.Auth.Token)
 		}
 	case core.AuthBasic:
-		if m.insert && m.row == 1 {
+		if m.insert && m.tabRow() == 1 {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("user   "), m.authInput.View())
 			m.renderSuggestions(b)
 		} else {
-			m.renderField(b, 1, "user", m.req.Auth.User)
+			m.renderField(b, urlRows+1, "user", m.req.Auth.User)
 		}
-		if m.insert && m.row == 2 {
+		if m.insert && m.tabRow() == 2 {
 			fmt.Fprintf(b, " %s %s\n", m.theme.FieldLabel.Render("pass   "), m.authInput.View())
 			m.renderSuggestions(b)
 		} else {
-			m.renderField(b, 2, "pass", strings.Repeat("•", len(m.req.Auth.Pass)))
+			m.renderField(b, urlRows+2, "pass", strings.Repeat("•", len(m.req.Auth.Pass)))
 		}
 	}
 }

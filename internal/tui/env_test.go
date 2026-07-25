@@ -49,7 +49,7 @@ func TestSendSubstitutesEnvironmentVars(t *testing.T) {
 
 	tm.Send(keyPress('j'))
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "{{base_url}}/hello")
+	waitForOutput(t, tm, "base_url", "/hello")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
 	waitForOutput(t, tm, "200 OK", "via", "template")
 
@@ -73,7 +73,7 @@ func TestSendReportsMissingVariables(t *testing.T) {
 
 	tm.Send(keyPress('j'))
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "{{nope}}/x")
+	waitForOutput(t, tm, "nope", "/x")
 	// The frame truncates long lines, so match only the message start.
 	tm.Send(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
 	waitForOutput(t, tm, "undefined variables: nope")
