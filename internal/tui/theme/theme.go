@@ -10,10 +10,13 @@ import (
 
 	"charm.land/lipgloss/v2"
 	catppuccin "github.com/catppuccin/go"
+
+	"github.com/yusupkhemraev/payk/internal/config"
 )
 
 type Theme struct {
 	Flavor catppuccin.Flavor
+	Icons  Icons
 
 	Base    color.Color
 	Mantle  color.Color
@@ -49,6 +52,23 @@ type Theme struct {
 	TreeFolder     lipgloss.Style
 	TreeCount      lipgloss.Style
 	Separator      lipgloss.Style
+
+	// Frameless chrome.
+	FocusBar   lipgloss.Style
+	PaneTitle  lipgloss.Style
+	PaneActive lipgloss.Style
+	TopBar     lipgloss.Style
+	Gutter     lipgloss.Style
+	Chip       lipgloss.Style
+	Badge      lipgloss.Style
+	Dirty      lipgloss.Style
+
+	modeNormal  lipgloss.Style
+	modeInsert  lipgloss.Style
+	modeSearch  lipgloss.Style
+	modeCommand lipgloss.Style
+
+	timingPhases []lipgloss.Style
 
 	statusOK       lipgloss.Style
 	statusRedirect lipgloss.Style
@@ -136,6 +156,34 @@ func New(flavor catppuccin.Flavor) *Theme {
 	t.TreeCount = lipgloss.NewStyle().Foreground(flavor.Overlay0())
 	t.Separator = lipgloss.NewStyle().Foreground(flavor.Surface1())
 
+	t.FocusBar = lipgloss.NewStyle().Foreground(flavor.Mauve())
+	t.PaneTitle = lipgloss.NewStyle().Foreground(flavor.Subtext0()).Bold(true)
+	t.PaneActive = lipgloss.NewStyle().Foreground(flavor.Mauve()).Bold(true)
+	t.TopBar = lipgloss.NewStyle().Background(flavor.Mantle())
+	t.Gutter = lipgloss.NewStyle().Foreground(flavor.Surface1())
+	t.Chip = lipgloss.NewStyle().
+		Background(flavor.Surface1()).
+		Foreground(flavor.Lavender())
+	t.Badge = lipgloss.NewStyle().
+		Background(flavor.Surface0()).
+		Foreground(flavor.Subtext0()).
+		Bold(true)
+	t.Dirty = lipgloss.NewStyle().Foreground(flavor.Yellow())
+
+	mode := lipgloss.NewStyle().Foreground(flavor.Crust()).Bold(true).Padding(0, 1)
+	t.modeNormal = mode.Background(flavor.Blue())
+	t.modeInsert = mode.Background(flavor.Green())
+	t.modeSearch = mode.Background(flavor.Yellow())
+	t.modeCommand = mode.Background(flavor.Mauve())
+
+	t.timingPhases = []lipgloss.Style{
+		lipgloss.NewStyle().Foreground(flavor.Teal()),
+		lipgloss.NewStyle().Foreground(flavor.Sapphire()),
+		lipgloss.NewStyle().Foreground(flavor.Mauve()),
+		lipgloss.NewStyle().Foreground(flavor.Pink()),
+		lipgloss.NewStyle().Foreground(flavor.Green()),
+	}
+
 	t.statusOK = lipgloss.NewStyle().Foreground(flavor.Green()).Bold(true)
 	t.statusRedirect = lipgloss.NewStyle().Foreground(flavor.Yellow()).Bold(true)
 	t.statusClient = lipgloss.NewStyle().Foreground(flavor.Peach()).Bold(true)
@@ -155,16 +203,45 @@ func New(flavor catppuccin.Flavor) *Theme {
 }
 
 func Default() *Theme {
-	return New(catppuccin.Mocha)
+	return FromConfig(config.Default())
+}
+
+// FromConfig builds the theme for a config: Catppuccin flavor plus glyph set.
+func FromConfig(cfg config.Config) *Theme {
+	t := ByName(cfg.Theme)
+	t.Icons = iconsFor(cfg.Icons)
+	return t
 }
 
 // ByName returns the theme for a Catppuccin flavor name (case-insensitive),
 // falling back to Mocha for unknown names.
 func ByName(name string) *Theme {
-	if flavor := catppuccin.Variant(name); flavor != nil {
-		return New(flavor)
+	flavor := catppuccin.Variant(name)
+	if flavor == nil {
+		flavor = catppuccin.Mocha
 	}
-	return Default()
+	t := New(flavor)
+	t.Icons = iconsFor(config.IconsUnicode)
+	return t
+}
+
+// Mode returns the status bar badge style for a vim-style mode name.
+func (t *Theme) Mode(mode string) lipgloss.Style {
+	switch mode {
+	case "INSERT":
+		return t.modeInsert
+	case "SEARCH":
+		return t.modeSearch
+	case "COMMAND":
+		return t.modeCommand
+	default:
+		return t.modeNormal
+	}
+}
+
+// TimingPhase colors one bar of the timings waterfall by its position.
+func (t *Theme) TimingPhase(i int) lipgloss.Style {
+	return t.timingPhases[i%len(t.timingPhases)]
 }
 
 func (t *Theme) PanelBorder(focused bool) lipgloss.Style {
