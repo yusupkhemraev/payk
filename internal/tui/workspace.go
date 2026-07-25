@@ -7,11 +7,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/yusupkhemraev/payk/internal/config"
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/storage"
 )
 
 type workspaceLoadedMsg struct {
+	prefs        config.Config
+	prefsErr     error
 	workspace    *storage.Workspace
 	collections  []*core.Collection
 	environments *core.Environments
@@ -35,13 +38,22 @@ func loadWorkspaceCmd(cfg Config) tea.Cmd {
 	return func() tea.Msg {
 		ws, err := resolveWorkspace(cfg)
 		if errors.Is(err, storage.ErrNotFound) {
-			return workspaceLoadedMsg{environments: &core.Environments{}}
+			prefs, prefsErr := config.Load("")
+			return workspaceLoadedMsg{
+				prefs: prefs, prefsErr: prefsErr,
+				environments: &core.Environments{},
+			}
 		}
 		if err != nil {
-			return workspaceLoadedMsg{err: err, environments: &core.Environments{}}
+			prefs, _ := config.Load("")
+			return workspaceLoadedMsg{
+				prefs: prefs, err: err,
+				environments: &core.Environments{},
+			}
 		}
 		collections, err := ws.LoadCollections()
 		msg := workspaceLoadedMsg{workspace: ws, collections: collections, err: err}
+		msg.prefs, msg.prefsErr = config.Load(ws.Dir)
 		msg.environments, _ = ws.LoadEnvironments()
 		if msg.environments == nil {
 			msg.environments = &core.Environments{}

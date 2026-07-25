@@ -75,6 +75,8 @@ type Response struct {
 
 	// wrap soft-wraps long lines in the body and headers tabs.
 	wrap bool
+	// lineNumbers renders a gutter next to body lines.
+	lineNumbers bool
 	// raw switches the body tab to the unformatted response bytes.
 	raw      bool
 	rawLines []string
@@ -93,6 +95,12 @@ func NewResponse(t *theme.Theme, keys keymap.KeyMap) Response {
 	search := textinput.New()
 	search.Prompt = "/"
 	return Response{theme: t, keys: keys, spin: sp, vp: viewport.New(), searchInput: search}
+}
+
+// SetTheme swaps the theme and gutter preference after a config reload.
+func (m *Response) SetTheme(t *theme.Theme, lineNumbers bool) {
+	m.theme = t
+	m.lineNumbers = lineNumbers
 }
 
 // Searching reports whether the search input captures keystrokes; the root

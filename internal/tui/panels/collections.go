@@ -122,6 +122,11 @@ func (m *Collections) Capturing() bool {
 	return m.searching || m.renaming || m.adding || m.pendingDelete != nil
 }
 
+// SetTheme swaps the theme after a config reload.
+func (m *Collections) SetTheme(t *theme.Theme) {
+	m.theme = t
+}
+
 func (m *Collections) SetWorkspace(collections []*core.Collection, hasWorkspace bool, err error) {
 	m.loading = false
 	m.loadErr = err

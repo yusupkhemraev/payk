@@ -72,7 +72,7 @@ func TestResponseRenderSync(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	var m tea.Model = New(Config{WorkspaceDir: serverWorkspace(t, srv.URL)})
-	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
+	m = stepMsg(m, tea.WindowSizeMsg{Width: 120, Height: 44})
 	m = runCmds(m, m.Init())
 	m = stepMsg(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
 	m = stepMsg(m, tea.KeyPressMsg{Code: tea.KeyEnter})

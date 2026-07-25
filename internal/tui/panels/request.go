@@ -98,6 +98,11 @@ func NewRequest(t *theme.Theme, keys keymap.KeyMap) Request {
 	}
 }
 
+// SetTheme swaps the theme after a config reload.
+func (m *Request) SetTheme(t *theme.Theme) {
+	m.theme = t
+}
+
 func (m *Request) SetRequest(req *core.Request) {
 	m.req = req
 	m.tab = tabURL

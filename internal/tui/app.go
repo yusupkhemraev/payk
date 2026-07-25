@@ -17,6 +17,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/yusupkhemraev/payk/internal/config"
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/importer"
 	"github.com/yusupkhemraev/payk/internal/importer/curl"
@@ -58,6 +59,7 @@ func (p pane) String() string {
 
 type Model struct {
 	cfg   Config
+	prefs config.Config
 	theme *theme.Theme
 	keys  keymap.KeyMap
 
@@ -106,10 +108,12 @@ type Model struct {
 }
 
 func New(cfg Config) Model {
-	t := theme.Default()
+	prefs := config.Default()
+	t := theme.FromConfig(prefs)
 	keys := keymap.Default()
 	m := Model{
 		cfg:            cfg,
+		prefs:          prefs,
 		theme:          t,
 		keys:           keys,
 		focus:          paneCollections,
@@ -142,6 +146,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workspace = msg.workspace
 		m.envs = msg.environments
 		m.importSources = msg.importSources
+		if msg.prefsErr != nil {
+			m.logMessage(msg.prefsErr.Error(), true)
+		}
+		m.applyPrefs(msg.prefs)
 		m.collections.SetWorkspace(msg.collections, msg.workspace != nil, msg.err)
 		m.syncEditorEnvironment()
 		return m, nil
@@ -855,11 +863,23 @@ func (m *Model) resizeFocused(delta int) {
 	m.applyLayout()
 }
 
+// applyPrefs swaps in a new theme and layout without losing panel state.
+func (m *Model) applyPrefs(prefs config.Config) {
+	m.prefs = prefs
+	m.theme = theme.FromConfig(prefs)
+	m.collections.SetTheme(m.theme)
+	m.request.SetTheme(m.theme)
+	m.response.SetTheme(m.theme, prefs.LineNumbers)
+	m.applyLayout()
+}
+
 func (m *Model) applyLayout() {
 	m.sizes = layout(m.width, m.height, layoutOptions{
 		sidebarVisible: m.sidebarVisible,
 		sidebarDelta:   m.sidebarDelta,
 		splitDelta:     m.splitDelta,
+		stacked:        m.prefs.Layout == config.LayoutStacked,
+		sidebarWidth:   m.prefs.SidebarWidth,
 	})
 	if m.zoomed {
 		// The focused pane takes the whole content area.
@@ -910,6 +930,13 @@ func (m Model) panesView() string {
 	}
 
 	switch m.sizes.Mode {
+	case ModeStacked:
+		stack := lipgloss.JoinVertical(lipgloss.Left, m.request.View(), m.response.View())
+		if !m.sidebarVisible {
+			return stack
+		}
+		return lipgloss.JoinHorizontal(lipgloss.Top, m.collections.View(), stack)
+
 	case ModeTriple:
 		return lipgloss.JoinHorizontal(
 			lipgloss.Top,

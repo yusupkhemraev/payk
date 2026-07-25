@@ -10,6 +10,9 @@ const (
 	ModeDouble
 	// ModeTriple shows all three panes side by side (>= 120 cols).
 	ModeTriple
+	// ModeStacked keeps the tree on the left and stacks the request above
+	// the response, giving both bodies the full pane width.
+	ModeStacked
 )
 
 const (
@@ -47,8 +50,25 @@ type layoutOptions struct {
 	sidebarVisible bool
 	// sidebarDelta widens (+) or narrows (-) the collections pane.
 	sidebarDelta int
-	// splitDelta moves the request/response boundary: + widens request.
+	// splitDelta moves the request/response boundary: + widens request
+	// in columns mode, + grows the request block in stacked mode.
 	splitDelta int
+	// stacked requests the stacked layout when the terminal is wide enough.
+	stacked bool
+	// sidebarWidth is the configured preferred width; 0 uses width/4.
+	sidebarWidth int
+}
+
+// minPaneHeight keeps a stacked block usable.
+const minPaneHeight = 6
+
+// sidebarFor computes the tree width from config, user resizing, and limits.
+func sidebarFor(width int, opts layoutOptions) int {
+	preferred := width / 4
+	if opts.sidebarWidth > 0 {
+		preferred = opts.sidebarWidth
+	}
+	return clamp(preferred+opts.sidebarDelta, sidebarMinWidth, width/2)
 }
 
 func layout(width, height int, opts layoutOptions) PanelSizes {
@@ -59,8 +79,23 @@ func layout(width, height int, opts layoutOptions) PanelSizes {
 	paneHeight := height - statusBarHeight - topBarHeight
 
 	switch {
+	case opts.stacked && width >= doubleBreakpoint && paneHeight >= 2*minPaneHeight:
+		sidebar := 0
+		if opts.sidebarVisible {
+			sidebar = sidebarFor(width, opts)
+		}
+		main := width - sidebar
+		requestHeight := clamp(paneHeight/2+opts.splitDelta,
+			minPaneHeight, paneHeight-minPaneHeight)
+		return PanelSizes{
+			Mode:        ModeStacked,
+			Collections: PanelSize{sidebar, paneHeight},
+			Request:     PanelSize{main, requestHeight},
+			Response:    PanelSize{main, paneHeight - requestHeight},
+		}
+
 	case width >= tripleBreakpoint:
-		sidebar := clamp(width/4+opts.sidebarDelta, sidebarMinWidth, width/2)
+		sidebar := sidebarFor(width, opts)
 		request := clamp((width-sidebar)/2+opts.splitDelta,
 			minPaneWidth, width-sidebar-minPaneWidth)
 		response := width - sidebar - request
@@ -73,7 +108,7 @@ func layout(width, height int, opts layoutOptions) PanelSizes {
 
 	case width >= doubleBreakpoint:
 		if opts.sidebarVisible {
-			sidebar := clamp(width/4+opts.sidebarDelta, sidebarMinWidth, width/2)
+			sidebar := sidebarFor(width, opts)
 			main := width - sidebar
 			return PanelSizes{
 				Mode:        ModeDouble,
