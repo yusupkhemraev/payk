@@ -9,10 +9,14 @@ binary, no runtime dependencies.
 
 ## Features
 
-- **Three-pane vim-style UI** — collections tree, request editor, response
-  viewer. `j/k/gg/G` everywhere, `/` to search in any pane, `:` command
-  line, `?` adaptive help. Panes are resizable (`<`/`>`) and any pane goes
-  fullscreen with `z`.
+- **Frameless vim-style UI** — collections tree on the left, request above
+  response (or three columns, your choice). `j/k/gg/G` everywhere, `/` to
+  search in any pane, `:` command line with completion, `?` adaptive help.
+  A mode badge tracks NORMAL/INSERT/SEARCH/COMMAND, panes resize with
+  `<`/`>`, and `z` zooms one to fullscreen.
+- **Configurable** — theme (four Catppuccin flavors), icon set (Nerd Font,
+  unicode, or none), layout, line numbers, and sidebar width live in
+  `config.yaml`, changeable on the fly with `:theme`, `:layout`, `:icons`.
 - **Plain YAML storage** — one file per request, folders are directories,
   stable key order. Everything lives in `.payk/` next to your code and
   diffs cleanly in git.
@@ -24,10 +28,11 @@ binary, no runtime dependencies.
   at a FastAPI project directory. Trees group by tags, bodies get examples
   generated from schemas, server URLs become environments, and declared
   auth (bearer/basic/apiKey) is pre-filled.
-- **Response viewer** — highlighted pretty-printed JSON with a raw-bytes
-  toggle, aligned headers table, DNS/TCP/TLS/TTFB timings, incremental
-  search with `n/N`, soft wrap, scroll position indicator, one-key copy to
-  clipboard, and a per-session history of past responses.
+- **Response viewer** — highlighted pretty-printed JSON with line numbers
+  and a raw-bytes toggle, aligned headers table, DNS/TCP/TLS/TTFB timings
+  as proportional bars, incremental search with `n/N`, soft wrap, one-key
+  copy to clipboard, and a per-session history of past responses. The tree
+  remembers each request's last status code.
 - **Request editor** — tabbed (URL/Params/Headers/Body/Auth) with
   insert/normal modes, chained header entry, JSON body formatting and
   highlighting, and an `$EDITOR` escape hatch for the body.
@@ -116,14 +121,15 @@ auth:
 | `z` | fullscreen the focused pane |
 | `<` / `>` | narrow / widen the focused pane |
 | `ctrl+b` | toggle collections sidebar |
-| `:` | command line — `:q` `:w` `:send` `:env` `:set` `:import` `:reimport` `:messages` |
+| `:` | command line — `:q` `:w` `:send` `:env` `:set` `:import` `:reimport` `:theme` `:layout` `:icons` `:messages` |
 | `?` | help overlay |
 
 ## Layout
 
-Three panes on wide terminals, two between 80 and 119 columns with a
-collapsible sidebar, single pane with tab switching below 80. Everything
-stays usable at 60×20.
+By default the tree sits on the left and the request stacks above the
+response, so both bodies get the full width. `layout: columns` puts all
+three side by side instead. Below 80 columns payk falls back to a single
+pane with tab switching; everything stays usable at 60×20.
 
 ## Development
 

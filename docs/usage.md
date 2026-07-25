@@ -26,7 +26,31 @@ then falls back to `~/.config/payk`. If nothing exists, the first import
 creates `./.payk` for you. One YAML file per request keeps git diffs
 minimal; renames show up as file moves.
 
-## 2. Moving around
+## 2. Configuration
+
+`.payk/config.yaml` (project) overrides `~/.config/payk/config.yaml`
+(global); anything missing falls back to defaults:
+
+```yaml
+theme: mocha           # latte | frappe | macchiato | mocha
+icons: unicode         # nerd (needs a Nerd Font) | unicode | none
+layout: stacked        # stacked (request above response) | columns
+line_numbers: true     # gutter in the response body
+sidebar_width: 34
+show_status_in_tree: true   # last response code next to each request
+wrap: false
+editor: ""             # overrides $EDITOR for the body escape hatch
+```
+
+`:theme`, `:layout`, and `:icons` change these live and write the file
+for you. Unknown values fall back to the default rather than breaking
+the UI.
+
+The tree shows the status of each request's last response (`200`,
+`403`, `ERR`), cached in `.payk/.cache/status.json` — a git-ignored
+directory, so sending never dirties your request files.
+
+## 3. Moving around
 
 The UI is three panes: **Collections** (tree), **Request** (editor),
 **Response** (viewer). Focus follows vim keys:
@@ -42,7 +66,7 @@ The status bar at the bottom shows the focused pane, the active
 environment, and transient messages. Long messages are truncated — press
 `m` (or `:messages`) to read the full text of everything recent.
 
-## 3. The collections tree
+## 4. The collections tree
 
 - `enter` on a folder toggles it; on a request, loads it into the editor.
 - `a` creates a new request in the selected collection or folder: type a
@@ -56,7 +80,7 @@ environment, and transient messages. Long messages are truncated — press
   directories move on disk accordingly).
 - `d` deletes the selected node after a `y/n` confirmation.
 
-## 4. Editing a request
+## 5. Editing a request
 
 Focus the editor and move between its tabs with `[` and `]`:
 **URL · Params · Headers · Body · Auth**.
@@ -85,7 +109,7 @@ Type `{{` in any field and payk suggests variables from the active
 environment; type `{{env:` to complete from process environment names.
 `tab` accepts the highlighted suggestion, `ctrl+n`/`ctrl+p` cycle.
 
-## 5. Environments and variables
+## 6. Environments and variables
 
 `environments.yaml` holds named variable sets:
 
@@ -121,7 +145,7 @@ Manage environments without touching the file:
 `:set` with no environments yet bootstraps a `default` one, and freshly
 set variables immediately show up in `{{` completion.
 
-## 6. Sending and reading responses
+## 7. Sending and reading responses
 
 `space` (or `:send`) sends the request in the editor. A spinner shows
 in-flight state; `esc` cancels. The response viewer has four tabs:
@@ -139,7 +163,7 @@ in-flight state; `esc` cancels. The response viewer has four tabs:
   time, status, and duration. `j`/`k` select, `enter` loads that past
   response back into the viewer. Errors are recorded too.
 
-## 7. Importing
+## 8. Importing
 
 ### curl
 
@@ -203,7 +227,7 @@ subprocess with a 30s timeout, and feeds the result to the OpenAPI
 importer. If the app fails to import, the Python stderr is shown so you
 can see the actual traceback.
 
-## 8. Command line
+## 9. Command line
 
 `:` opens the command line (pasting into it works). Completion is built
 in: an empty line lists every command, typing filters them, and argument
@@ -224,4 +248,7 @@ highlighted candidate, `ctrl+n`/`ctrl+p` (or arrows) cycle.
 | `:unset <name>` | remove a variable from the active environment |
 | `:import <file-or-url-or-dir>` | run an importer (`~` expands) |
 | `:reimport [collection]` | re-run recorded import sources |
+| `:theme <flavor>` | latte · frappe · macchiato · mocha |
+| `:layout <mode>` | stacked · columns |
+| `:icons <set>` | nerd · unicode · none |
 | `:messages` | open the message log |
