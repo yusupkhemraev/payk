@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/yusupkhemraev/payk/internal/config"
 )
 
 type commandSpec struct {
@@ -23,6 +25,9 @@ var commandSpecs = []commandSpec{
 	{name: "unset", desc: "remove variable", args: true},
 	{name: "import", desc: "import curl / OpenAPI / FastAPI", args: true},
 	{name: "reimport", desc: "re-run recorded imports", args: true},
+	{name: "theme", desc: "latte · frappe · macchiato · mocha", args: true},
+	{name: "layout", desc: "stacked · columns", args: true},
+	{name: "icons", desc: "nerd · unicode · none", args: true},
 	{name: "messages", desc: "message log"},
 	{name: "q", desc: "quit"},
 }
@@ -57,8 +62,33 @@ func (m *Model) commandSuggestions() []cmdSuggestion {
 		return m.varArgSuggestions(head, rest)
 	case "reimport":
 		return m.reimportArgSuggestions(rest)
+	case "theme":
+		return enumSuggestions(head, rest, m.prefs.Theme,
+			"latte", "frappe", "macchiato", "mocha")
+	case "layout":
+		return enumSuggestions(head, rest, m.prefs.Layout,
+			config.LayoutStacked, config.LayoutColumns)
+	case "icons":
+		return enumSuggestions(head, rest, m.prefs.Icons,
+			config.IconsNerd, config.IconsUnicode, config.IconsNone)
 	}
 	return nil
+}
+
+// enumSuggestions completes a fixed set of values, marking the active one.
+func enumSuggestions(head, rest, active string, values ...string) []cmdSuggestion {
+	var out []cmdSuggestion
+	for _, v := range values {
+		if !strings.HasPrefix(v, rest) {
+			continue
+		}
+		desc := ""
+		if v == active {
+			desc = "active now"
+		}
+		out = append(out, cmdSuggestion{full: head + " " + v, label: v, desc: desc})
+	}
+	return out
 }
 
 func (m *Model) envArgSuggestions(rest string) []cmdSuggestion {

@@ -421,6 +421,30 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 		m.showMessages = true
 		return m, nil
 
+	case "theme":
+		if len(fields) < 2 {
+			m.setStatus("usage: :theme latte|frappe|macchiato|mocha", true)
+			return m, nil
+		}
+		return m.updatePrefs(func(p *config.Config) { p.Theme = fields[1] },
+			"theme: "+fields[1])
+
+	case "layout":
+		if len(fields) < 2 {
+			m.setStatus("usage: :layout stacked|columns", true)
+			return m, nil
+		}
+		return m.updatePrefs(func(p *config.Config) { p.Layout = fields[1] },
+			"layout: "+fields[1])
+
+	case "icons":
+		if len(fields) < 2 {
+			m.setStatus("usage: :icons nerd|unicode|none", true)
+			return m, nil
+		}
+		return m.updatePrefs(func(p *config.Config) { p.Icons = fields[1] },
+			"icons: "+fields[1])
+
 	case "import":
 		if len(fields) < 2 {
 			m.setStatus("usage: :import <file-or-url>", true)
@@ -866,6 +890,31 @@ func (m *Model) resizeFocused(delta int) {
 		m.splitDelta -= delta
 	}
 	m.applyLayout()
+}
+
+// updatePrefs applies a config change live and writes it to the workspace
+// config so it survives a restart. Values that do not survive normalization
+// are reported instead of silently ignored.
+func (m Model) updatePrefs(change func(*config.Config), note string) (tea.Model, tea.Cmd) {
+	before := m.prefs
+	next := m.prefs
+	change(&next)
+
+	normalized := next
+	normalized.Normalize()
+	if normalized == before {
+		m.setStatus("unknown value — "+note+" ignored", true)
+		return m, nil
+	}
+
+	m.applyPrefs(normalized)
+	m.setStatus(note, false)
+
+	ws, err := m.ensureWorkspace()
+	if err != nil {
+		return m, nil
+	}
+	return m, savePrefsCmd(ws, normalized)
 }
 
 // recordStatus caches the response label for the request that was sent, so

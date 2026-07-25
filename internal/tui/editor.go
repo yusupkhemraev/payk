@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/yusupkhemraev/payk/internal/config"
 	"github.com/yusupkhemraev/payk/internal/core"
 	"github.com/yusupkhemraev/payk/internal/storage"
 	"github.com/yusupkhemraev/payk/internal/tui/panels"
@@ -95,6 +96,16 @@ func createRequestCmd(ws *storage.Workspace, cfg Config, msg panels.CreateReques
 			path:       msg.Path,
 			name:       msg.Name,
 		}
+	}
+}
+
+// savePrefsCmd writes user preferences into the workspace config.
+func savePrefsCmd(ws *storage.Workspace, prefs config.Config) tea.Cmd {
+	return func() tea.Msg {
+		if err := config.Save(ws.Dir, prefs); err != nil {
+			return panels.StatusNote{Text: "config: " + err.Error(), IsErr: true}
+		}
+		return nil
 	}
 }
 

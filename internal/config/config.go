@@ -83,7 +83,7 @@ func Load(workspaceDir string) (Config, error) {
 		}
 	}
 
-	cfg.normalize()
+	cfg.Normalize()
 	return cfg, firstErr
 }
 
@@ -103,9 +103,9 @@ func Save(workspaceDir string, cfg Config) error {
 	return nil
 }
 
-// normalize replaces unknown enum values and out-of-range numbers with
+// Normalize replaces unknown enum values and out-of-range numbers with
 // defaults so a typo degrades gracefully instead of breaking the UI.
-func (c *Config) normalize() {
+func (c *Config) Normalize() {
 	def := Default()
 
 	switch c.Theme {
