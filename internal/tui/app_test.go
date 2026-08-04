@@ -39,7 +39,7 @@ func waitForOutput(t *testing.T, tm *teatest.TestModel, markers ...string) {
 func TestStartupShowsAllPanesAndQuits(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
 
-	waitForOutput(t, tm, "COLLECTIONS", "REQUEST", "RESPONSE", "payk")
+	waitForOutput(t, tm, "Collections", "Request", "Response", "payk")
 
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
@@ -47,7 +47,7 @@ func TestStartupShowsAllPanesAndQuits(t *testing.T) {
 
 func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "COLLECTIONS")
+	waitForOutput(t, tm, "Collections")
 
 	tm.Send(tea.WindowSizeMsg{Width: 60, Height: 20})
 	waitForOutput(t, tm, "payk")
@@ -61,13 +61,13 @@ func TestResizeToTinyTerminalKeepsRendering(t *testing.T) {
 
 func TestHelpOverlayTogglesOpenAndClosed(t *testing.T) {
 	tm := teatest.NewTestModel(t, New(testConfig(t)), teatest.WithInitialTermSize(140, 40))
-	waitForOutput(t, tm, "COLLECTIONS")
+	waitForOutput(t, tm, "Collections")
 
 	tm.Send(keyPress('?'))
 	waitForOutput(t, tm, "keybindings")
 
 	tm.Send(keyPress('?'))
-	waitForOutput(t, tm, "COLLECTIONS")
+	waitForOutput(t, tm, "Collections")
 
 	tm.Send(keyPress('q'))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))

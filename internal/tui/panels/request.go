@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -643,7 +644,7 @@ func (m Request) dirtyMark() string {
 }
 
 func (m Request) View() string {
-	return frame(m.theme, "REQUEST", m.breadcrumb(), m.focused, m.width, m.height, m.body())
+	return frame(m.theme, "Request", m.breadcrumb(), m.focused, m.width, m.height, m.body())
 }
 
 func (m Request) body() string {
@@ -693,26 +694,33 @@ func (m Request) tabBar() string {
 			style = m.theme.TabActive
 		}
 		label := style.Render(name)
-		if count := m.tabCount(editorTab(i)); count > 0 {
-			label += " " + m.theme.Badge.Render(fmt.Sprint(count))
+		if m.tabFilled(editorTab(i)) {
+			label += " " + m.theme.TabDot.Render("•")
 		}
 		parts = append(parts, label)
 	}
-	return " " + strings.Join(parts, m.theme.TabInactive.Render("  ·  "))
+	return strings.Join(parts, "   ")
 }
 
-// tabCount is the badge next to a tab name, 0 for tabs without one.
-func (m Request) tabCount(tab editorTab) int {
+// tabFilled reports whether a tab holds anything, mirrored by a dot next to
+// its name so empty sections are obvious without opening them.
+func (m Request) tabFilled(tab editorTab) bool {
 	if m.req == nil {
-		return 0
+		return false
 	}
 	switch tab {
 	case tabParams:
-		return len(m.req.Params)
+		return len(m.req.Params) > 0
 	case tabHeaders:
-		return len(m.req.Headers)
+		return len(m.req.Headers) > 0
+	case tabBody:
+		return m.req.Body.Content != ""
+	case tabAuth:
+		return m.req.Auth.Type != core.AuthNone
+	case tabInfo:
+		return m.req.Description != ""
 	}
-	return 0
+	return false
 }
 
 func (m Request) renderField(b *strings.Builder, row int, label, value string) {
@@ -728,11 +736,11 @@ func (m Request) renderField(b *strings.Builder, row int, label, value string) {
 // renderURLLine draws the method and URL above the tabs, with {{vars}} as
 // chips and the send hint on the right.
 func (m Request) renderURLLine(b *strings.Builder) {
-	method := m.theme.Method(m.req.Method).Render(m.req.Method)
+	method := m.theme.MethodPill(m.req.Method)
 	if m.selectedRow(0) {
-		method = m.theme.Selected.Render(" " + m.req.Method + " ")
+		method += m.theme.PaneActive.Render(" ▾")
 	} else {
-		method = " " + method
+		method += m.theme.Muted.Render(" ▾")
 	}
 
 	if m.insert && m.onURLRow() {
@@ -742,55 +750,49 @@ func (m Request) renderURLLine(b *strings.Builder) {
 	}
 
 	url := m.renderChips(m.req.URL)
-	if url == "" {
+	if m.req.URL == "" {
 		url = m.theme.Muted.Render("(no url — press enter)")
 	}
 	if m.selectedRow(1) {
 		url = m.theme.Selected.Render(" " + m.req.URL + " ")
 	}
 
-	line := method + "  " + url
-	if hint := m.sendHint(); hint != "" {
-		line = SplitRow(line, hint, m.width-2)
-	}
+	line := SplitRow(method+"  "+url, m.sendHint(), m.width-4)
 	fmt.Fprintf(b, "%s\n", line)
 }
 
-// renderChips renders {{var}} placeholders as subtle pills so a URL reads
-// as tokens instead of braces.
+// urlToken splits a URL into variables, path params, and plain text so each
+// reads in its own color.
+var urlToken = regexp.MustCompile(`\{\{[^}]*\}\}|\{[^}/]*\}|:[A-Za-z_][A-Za-z0-9_]*`)
+
 func (m Request) renderChips(s string) string {
 	if s == "" {
 		return ""
 	}
+	text := lipgloss.NewStyle().Foreground(m.theme.Text)
+
 	var out strings.Builder
-	rest := s
-	for {
-		open := strings.Index(rest, "{{")
-		if open < 0 {
-			break
+	last := 0
+	for _, loc := range urlToken.FindAllStringIndex(s, -1) {
+		out.WriteString(text.Render(s[last:loc[0]]))
+		token := s[loc[0]:loc[1]]
+		if strings.HasPrefix(token, "{{") {
+			out.WriteString(m.theme.VarChip.Render(token))
+		} else {
+			out.WriteString(m.theme.PathChip.Render(token))
 		}
-		close := strings.Index(rest[open:], "}}")
-		if close < 0 {
-			break
-		}
-		close += open
-		out.WriteString(m.theme.Muted.Render(rest[:open]))
-		out.WriteString(m.theme.Chip.Render(" " + rest[open+2:close] + " "))
-		rest = rest[close+2:]
+		last = loc[1]
 	}
-	out.WriteString(lipgloss.NewStyle().Foreground(m.theme.Text).Render(rest))
+	out.WriteString(text.Render(s[last:]))
 	return out.String()
 }
 
 func (m Request) sendHint() string {
-	if m.insert {
-		return ""
+	label := "Send"
+	if icon := m.theme.Icons.Send; icon != "" {
+		label = icon + " Send"
 	}
-	icon := m.theme.Icons.Send
-	if icon == "" {
-		return m.theme.Muted.Render("space send")
-	}
-	return lipgloss.NewStyle().Foreground(m.theme.Flavor.Green()).Render(icon + " space")
+	return lipgloss.NewStyle().Foreground(m.theme.Flavor.Green()).Bold(true).Render(label)
 }
 
 // selectedRow reports whether an absolute row is the highlighted one.
@@ -845,7 +847,13 @@ func (m Request) renderBodyTab(b *strings.Builder) {
 	if bodyType == "" {
 		bodyType = "none"
 	}
-	m.renderField(b, urlRows, "type", bodyType)
+	typeBar := m.theme.Bar.Width(m.width - 4).
+		Render(" " + strings.ToUpper(bodyType) + "  ▾")
+	if m.selectedRow(urlRows) {
+		typeBar = m.theme.Selected.Width(m.width - 4).
+			Render(" " + strings.ToUpper(bodyType) + "  ▾")
+	}
+	fmt.Fprintf(b, "%s\n\n", typeBar)
 	if m.insert {
 		fmt.Fprintf(b, "%s\n", m.bodyArea.View())
 		return

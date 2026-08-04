@@ -25,7 +25,7 @@ var commandSpecs = []commandSpec{
 	{name: "unset", desc: "remove variable", args: true},
 	{name: "import", desc: "import curl / OpenAPI / FastAPI", args: true},
 	{name: "reimport", desc: "re-run recorded imports", args: true},
-	{name: "theme", desc: "latte · frappe · macchiato · mocha", args: true},
+	{name: "theme", desc: "latte · frappe · macchiato · mocha · espresso", args: true},
 	{name: "layout", desc: "stacked · columns", args: true},
 	{name: "icons", desc: "nerd · unicode · none", args: true},
 	{name: "messages", desc: "message log"},
@@ -64,7 +64,7 @@ func (m *Model) commandSuggestions() []cmdSuggestion {
 		return m.reimportArgSuggestions(rest)
 	case "theme":
 		return enumSuggestions(head, rest, m.prefs.Theme,
-			"latte", "frappe", "macchiato", "mocha")
+			"latte", "frappe", "macchiato", "mocha", "espresso")
 	case "layout":
 		return enumSuggestions(head, rest, m.prefs.Layout,
 			config.LayoutStacked, config.LayoutColumns)

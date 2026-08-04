@@ -39,45 +39,43 @@ func SplitRow(left, right string, w int) string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
-// frame renders a frameless pane of exactly width x height: an accent focus
-// bar on the left, a title row with an optional right-aligned meta, a rule,
-// and the body. Overflow is clipped so resizing never breaks rendering.
+// frame renders a bordered pane of exactly width x height. The title sits in
+// the top border on the right, with optional meta (pills) to its left, the
+// way a labelled box reads without spending a content row. Overflow is
+// clipped so resizing never breaks rendering.
 func frame(t *theme.Theme, title, meta string, focused bool, width, height int, body string) string {
-	if width < 4 || height < 3 {
+	if width < 6 || height < 3 {
 		return ""
 	}
 
-	bar := " "
-	titleStyle := t.PaneTitle
+	border := t.Border
 	if focused {
-		bar = t.FocusBar.Render("▎")
-		titleStyle = t.PaneActive
+		border = t.BorderOn
 	}
-
 	inner := width - 2
-	head := titleStyle.Render(title)
-	if meta != "" {
-		head = SplitRow(head, t.TreeCount.Render(meta), inner)
-	}
 
-	content := []string{
-		ansi.Truncate(head, inner, "…"),
-		t.Separator.Render(strings.Repeat("─", inner)),
+	// Build the top border right to left: corner, title, meta, then dashes.
+	right := " " + t.PaneTitle.Render(title) + " "
+	if focused {
+		right = " " + t.PaneActive.Render(title) + " "
 	}
+	if meta != "" {
+		right = " " + meta + right
+	}
+	fill := max(inner-ansi.StringWidth(right), 1)
+	top := border.Render("╭"+strings.Repeat("─", fill)) + right + border.Render("╮")
+
+	lines := []string{top}
+	side := border.Render("│")
 	for _, line := range strings.Split(body, "\n") {
-		if len(content) >= height {
+		if len(lines) >= height-1 {
 			break
 		}
-		content = append(content, ansi.Truncate(line, inner, "…"))
+		lines = append(lines, side+Pad(" "+ansi.Truncate(line, inner-2, "…"), inner)+side)
 	}
-
-	out := make([]string, height)
-	for i := range height {
-		line := ""
-		if i < len(content) {
-			line = content[i]
-		}
-		out[i] = bar + " " + Pad(line, inner)
+	for len(lines) < height-1 {
+		lines = append(lines, side+strings.Repeat(" ", inner)+side)
 	}
-	return strings.Join(out, "\n")
+	lines = append(lines, border.Render("╰"+strings.Repeat("─", inner)+"╯"))
+	return strings.Join(lines, "\n")
 }

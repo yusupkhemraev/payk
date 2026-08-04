@@ -75,21 +75,21 @@ func TestZoomTogglesFullscreenPane(t *testing.T) {
 	m = typeString(m, "l")
 	m = typeString(m, "z")
 	view := plainView(m)
-	if strings.Contains(view, "COLLECTIONS") || strings.Contains(view, "RESPONSE") {
+	if strings.Contains(view, "Collections") || strings.Contains(view, "Response") {
 		t.Errorf("zoomed view should show only the focused pane:\n%s", view)
 	}
-	if !strings.Contains(view, "REQUEST") || !strings.Contains(view, "zoom") {
+	if !strings.Contains(view, "Request") || !strings.Contains(view, "zoom") {
 		t.Errorf("zoomed pane and status flag missing:\n%s", view)
 	}
 
 	// h moves focus while zoomed; z toggles back to the split view.
 	m = typeString(m, "h")
-	if !strings.Contains(plainView(m), "COLLECTIONS") {
+	if !strings.Contains(plainView(m), "Collections") {
 		t.Errorf("focus switch while zoomed should show collections")
 	}
 	m = typeString(m, "z")
 	view = plainView(m)
-	if !strings.Contains(view, "REQUEST") || !strings.Contains(view, "RESPONSE") {
+	if !strings.Contains(view, "Request") || !strings.Contains(view, "Response") {
 		t.Errorf("unzoom should restore the split view:\n%s", view)
 	}
 }

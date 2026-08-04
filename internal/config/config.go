@@ -29,6 +29,10 @@ type Config struct {
 	// Layout is stacked (request above response) or columns (three panes).
 	Layout string `yaml:"layout"`
 
+	// Transparent leaves the background unpainted so a blurred or
+	// translucent terminal shows through.
+	Transparent bool `yaml:"transparent"`
+
 	LineNumbers      bool `yaml:"line_numbers"`
 	SidebarWidth     int  `yaml:"sidebar_width"`
 	ShowStatusInTree bool `yaml:"show_status_in_tree"`
@@ -110,6 +114,10 @@ func (c *Config) Normalize() {
 
 	switch c.Theme {
 	case "latte", "frappe", "macchiato", "mocha":
+	case "espresso":
+		// Espresso is Macchiato over a transparent background, matching the
+		// terminal theme of the same name.
+		c.Transparent = true
 	default:
 		c.Theme = def.Theme
 	}

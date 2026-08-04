@@ -610,7 +610,7 @@ func (m Collections) View() string {
 	if total := m.totalRequests(); total > 0 {
 		meta = fmt.Sprintf("· %d", total)
 	}
-	return frame(m.theme, "COLLECTIONS", meta, m.focused, m.width, m.height, m.body())
+	return frame(m.theme, "Collections", meta, m.focused, m.width, m.height, m.body())
 }
 
 func (m Collections) totalRequests() int {
@@ -674,7 +674,7 @@ func (m Collections) renderRow(n *node, selected bool) string {
 		context = "  " + n.pathLabel()
 	}
 
-	inner := m.width - 2
+	inner := m.width - 4
 	status := m.statusFor(n)
 
 	// The selected row gets a single background style stretched across the

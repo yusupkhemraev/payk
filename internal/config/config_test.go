@@ -101,3 +101,31 @@ func TestSaveRoundTrip(t *testing.T) {
 		t.Errorf("round trip mismatch:\nsaved  %+v\nloaded %+v", cfg, loaded)
 	}
 }
+
+func TestEspressoImpliesTransparency(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ws := t.TempDir()
+	write(t, filepath.Join(ws, FileName), "theme: espresso\n")
+
+	cfg, err := Load(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "espresso" || !cfg.Transparent {
+		t.Errorf("espresso should keep its name and turn transparency on: %+v", cfg)
+	}
+}
+
+func TestTransparentStandsAlone(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ws := t.TempDir()
+	write(t, filepath.Join(ws, FileName), "theme: mocha\ntransparent: true\n")
+
+	cfg, err := Load(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "mocha" || !cfg.Transparent {
+		t.Errorf("transparency works with any flavor: %+v", cfg)
+	}
+}

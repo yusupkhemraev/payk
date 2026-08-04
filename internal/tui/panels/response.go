@@ -480,16 +480,15 @@ func (m *Response) cycleMatch(delta int) {
 }
 
 func (m Response) View() string {
-	meta := ""
-	if pos := m.scrollIndicator(); pos != "" {
-		meta = strings.TrimPrefix(pos, "· ")
-	}
-	return frame(m.theme, "RESPONSE", meta, m.focused, m.width, m.height, m.body())
+	return frame(m.theme, "Response", m.headerMeta(), m.focused, m.width, m.height, m.body())
 }
 
 func (m Response) body() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", m.tabBar())
+	// Scroll position rides the tab row: the border already carries the
+	// status and size pills.
+	fmt.Fprintf(&b, "%s\n\n", SplitRow(m.tabBar(),
+		m.theme.Muted.Render(m.scrollIndicator()), m.width-4))
 
 	switch {
 	case m.sending:
@@ -522,7 +521,6 @@ func (m Response) renderError(b *strings.Builder) {
 }
 
 func (m Response) renderResponse(b *strings.Builder) {
-	fmt.Fprintf(b, "%s\n\n", m.statusLine())
 	if m.tab == respBody {
 		if line := m.searchLine(); line != "" {
 			fmt.Fprintf(b, "%s\n", line)
@@ -546,24 +544,15 @@ func (m Response) searchLine() string {
 	return ""
 }
 
-// statusLine renders the status pill plus response metadata; scroll position
-// lives in the pane header instead.
-func (m Response) statusLine() string {
-	pill := m.theme.Status(m.resp.StatusCode).
-		Background(m.theme.Surface).
-		Render(" " + m.resp.Status + " ")
-	meta := fmt.Sprintf("%s  ·  %s  ·  %s",
-		formatDuration(m.resp.Timings.Total), formatSize(m.resp.Size()), m.resp.Proto)
-	line := " " + pill + "  " + m.theme.Muted.Render(meta)
-	if m.resp.Truncated {
-		line += "  " + m.theme.Status(400).Render("truncated")
+// headerMeta renders the size/duration and status pills shown in the pane
+// border, where they stay visible whichever tab is open.
+func (m Response) headerMeta() string {
+	if m.resp == nil {
+		return ""
 	}
-	if len(m.history) > 0 && m.theme.Icons.History != "" {
-		line = SplitRow(line,
-			m.theme.Muted.Render(fmt.Sprintf("%s %d", m.theme.Icons.History, len(m.history))),
-			m.width-2)
-	}
-	return line
+	size := m.theme.PillMuted.Render(fmt.Sprintf(" %s in %s ",
+		formatSize(m.resp.Size()), formatDuration(m.resp.Timings.Total)))
+	return size + " " + m.theme.StatusPill(m.resp.StatusCode, m.resp.Status)
 }
 
 func (m Response) scrollIndicator() string {
@@ -600,7 +589,7 @@ func (m Response) tabBar() string {
 		}
 		parts = append(parts, style.Render(name))
 	}
-	return " " + strings.Join(parts, m.theme.TabInactive.Render(" · "))
+	return strings.Join(parts, "   ")
 }
 
 // plainBody pretty-prints the body without styling; search matches against

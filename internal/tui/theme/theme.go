@@ -17,6 +17,8 @@ import (
 type Theme struct {
 	Flavor catppuccin.Flavor
 	Icons  Icons
+	// Transparent means the app must not paint its own background.
+	Transparent bool
 
 	Base    color.Color
 	Mantle  color.Color
@@ -53,10 +55,17 @@ type Theme struct {
 	TreeCount      lipgloss.Style
 	Separator      lipgloss.Style
 
-	// Frameless chrome.
+	// Pane chrome.
 	FocusBar   lipgloss.Style
 	PaneTitle  lipgloss.Style
 	PaneActive lipgloss.Style
+	Border     lipgloss.Style
+	BorderOn   lipgloss.Style
+	PillMuted  lipgloss.Style
+	Bar        lipgloss.Style
+	VarChip    lipgloss.Style
+	PathChip   lipgloss.Style
+	TabDot     lipgloss.Style
 	TopBar     lipgloss.Style
 	Gutter     lipgloss.Style
 	Chip       lipgloss.Style
@@ -157,6 +166,15 @@ func New(flavor catppuccin.Flavor) *Theme {
 	t.Separator = lipgloss.NewStyle().Foreground(flavor.Surface1())
 
 	t.FocusBar = lipgloss.NewStyle().Foreground(flavor.Mauve())
+	t.Border = lipgloss.NewStyle().Foreground(flavor.Surface1())
+	t.BorderOn = lipgloss.NewStyle().Foreground(flavor.Mauve())
+	t.PillMuted = lipgloss.NewStyle().
+		Background(flavor.Surface1()).
+		Foreground(flavor.Subtext0())
+	t.Bar = lipgloss.NewStyle().Background(flavor.Surface0()).Foreground(flavor.Subtext1())
+	t.VarChip = lipgloss.NewStyle().Foreground(flavor.Mauve())
+	t.PathChip = lipgloss.NewStyle().Foreground(flavor.Blue())
+	t.TabDot = lipgloss.NewStyle().Foreground(flavor.Peach())
 	t.PaneTitle = lipgloss.NewStyle().Foreground(flavor.Subtext0()).Bold(true)
 	t.PaneActive = lipgloss.NewStyle().Foreground(flavor.Mauve()).Bold(true)
 	t.TopBar = lipgloss.NewStyle().Background(flavor.Mantle())
@@ -208,9 +226,31 @@ func Default() *Theme {
 
 // FromConfig builds the theme for a config: Catppuccin flavor plus glyph set.
 func FromConfig(cfg config.Config) *Theme {
-	t := ByName(cfg.Theme)
+	name := cfg.Theme
+	if name == "espresso" {
+		name = "macchiato"
+	}
+	t := ByName(name)
 	t.Icons = iconsFor(cfg.Icons)
+	if cfg.Transparent {
+		t.makeTransparent()
+	}
 	return t
+}
+
+// makeTransparent drops the background fills so a translucent terminal shows
+// through; pills keep theirs, since they are the accent.
+func (t *Theme) makeTransparent() {
+	t.Transparent = true
+	clear := func(s lipgloss.Style) lipgloss.Style {
+		return s.Background(nil)
+	}
+	t.TopBar = clear(t.TopBar)
+	t.StatusBar = clear(t.StatusBar)
+	t.StatusHint = clear(t.StatusHint)
+	t.StatusFocus = clear(t.StatusFocus).Foreground(t.Flavor.Subtext0())
+	t.Bar = clear(t.Bar)
+	t.Selected = t.Selected.Background(t.Flavor.Surface0())
 }
 
 // ByName returns the theme for a Catppuccin flavor name (case-insensitive),
@@ -237,6 +277,22 @@ func (t *Theme) Mode(mode string) lipgloss.Style {
 	default:
 		return t.modeNormal
 	}
+}
+
+// MethodPill renders the method as a filled badge, the way a dropdown reads.
+func (t *Theme) MethodPill(method string) string {
+	style := t.Method(method).
+		Background(t.Method(method).GetForeground()).
+		Foreground(t.Flavor.Crust())
+	return style.Render(" " + strings.ToUpper(method) + " ")
+}
+
+// StatusPill renders an HTTP status as a filled badge.
+func (t *Theme) StatusPill(code int, label string) string {
+	return t.Status(code).
+		Background(t.Status(code).GetForeground()).
+		Foreground(t.Flavor.Crust()).
+		Render(" " + label + " ")
 }
 
 // TimingPhase colors one bar of the timings waterfall by its position.

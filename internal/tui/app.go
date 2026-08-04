@@ -423,7 +423,7 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 
 	case "theme":
 		if len(fields) < 2 {
-			m.setStatus("usage: :theme latte|frappe|macchiato|mocha", true)
+			m.setStatus("usage: :theme latte|frappe|macchiato|mocha|espresso", true)
 			return m, nil
 		}
 		return m.updatePrefs(func(p *config.Config) { p.Theme = fields[1] },
@@ -992,23 +992,24 @@ func (m Model) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
-	v.BackgroundColor = m.theme.Base
+	if !m.theme.Transparent {
+		v.BackgroundColor = m.theme.Base
+	}
 	return v
 }
 
-// vRule is the column drawn between side-by-side panes.
+// gap is the blank column between neighbouring boxes; their own borders
+// already draw the boundary.
 func (m Model) vRule(height int) string {
 	rows := make([]string, height)
-	line := m.theme.Separator.Render("│")
 	for i := range rows {
-		rows[i] = line
+		rows[i] = " "
 	}
 	return strings.Join(rows, "\n")
 }
 
-// hRule separates the stacked request and response blocks.
 func (m Model) hRule(width int) string {
-	return m.theme.Separator.Render(strings.Repeat("─", width))
+	return strings.Repeat(" ", width)
 }
 
 func (m Model) panesView() string {
@@ -1193,6 +1194,18 @@ func clampBlock(block string, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
+// keyHints lists what the focused pane can do right now.
+func (m Model) keyHints() string {
+	switch m.focus {
+	case paneCollections:
+		return "a new   r rename   d delete   enter open   space send "
+	case paneRequest:
+		return "i edit   f format   e editor   :w save   space send "
+	default:
+		return "/ search   y copy   r raw   w wrap   z zoom "
+	}
+}
+
 // mode names the current vim-style mode for the status bar badge.
 func (m Model) mode() string {
 	switch {
@@ -1226,19 +1239,15 @@ func (m Model) topBar() string {
 	}
 
 	left := " " + m.theme.PaneActive.Render("payk") +
+		m.theme.Muted.Render(" "+m.versionLabel()) +
 		m.theme.Muted.Render("  ·  ") + lipgloss.NewStyle().Foreground(m.theme.Text).Render(name)
-	if m.envs != nil && m.envs.Active != "" {
-		env := m.envs.Active
-		if icon := m.theme.Icons.Env; icon != "" {
-			env = icon + " " + env
-		}
-		left += m.theme.Muted.Render("  ›  ") +
-			lipgloss.NewStyle().Foreground(m.theme.Flavor.Teal()).Render(env)
-	}
 
-	bar := m.theme.TopBar.Width(m.width).MaxWidth(m.width).
-		Render(panels.SplitRow(left, m.theme.Muted.Render(m.versionLabel()+" "), m.width))
-	return bar + "\n" + m.theme.Separator.Render(strings.Repeat("─", m.width))
+	hints := m.theme.Muted.Render("/ ") + m.theme.HelpDesc.Render("search") +
+		m.theme.Muted.Render("   : ") + m.theme.HelpDesc.Render("commands") +
+		m.theme.Muted.Render("   ? ") + m.theme.HelpDesc.Render("help") + " "
+
+	return m.theme.TopBar.Width(m.width).MaxWidth(m.width).
+		Render(panels.SplitRow(left, hints, m.width)) + "\n"
 }
 
 func (m Model) statusView() string {
@@ -1276,23 +1285,22 @@ func (m Model) statusView() string {
 		segments = append(segments, m.theme.StatusFocus.Render("zoom"))
 	}
 
-	// The trailing segment (message or hint) shrinks to whatever width the
-	// fixed segments leave over, so the bar never overflows.
-	used := lipgloss.Width(lipgloss.JoinHorizontal(lipgloss.Top, segments...))
-	remaining := max(m.width-used-1, 0)
+	left := lipgloss.JoinHorizontal(lipgloss.Top, segments...)
+
+	// Messages take the space the fixed segments leave; without one the bar
+	// shows the keys for the actions of the focused pane.
+	remaining := max(m.width-lipgloss.Width(left)-1, 0)
+	right := m.theme.StatusHint.Render(ansi.Truncate(m.keyHints(), remaining, "…"))
 	if m.statusMsg != "" {
 		style := m.theme.StatusHint
 		if m.statusIsErr {
 			style = style.Foreground(m.theme.Flavor.Red())
 		}
-		segments = append(segments, style.Render(ansi.Truncate(m.statusMsg, remaining, "…")))
-	} else {
-		segments = append(segments, m.theme.StatusHint.Render(
-			ansi.Truncate("? help · : cmd · z zoom · q quit", remaining, "…")))
+		right = style.Render(ansi.Truncate(m.statusMsg, remaining, "…"))
 	}
 
-	bar := lipgloss.JoinHorizontal(lipgloss.Top, segments...)
-	return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).Render(bar)
+	return m.theme.StatusBar.Width(m.width).MaxWidth(m.width).
+		Render(panels.SplitRow(left, right, m.width))
 }
 
 func padRight(s string, width int) string {

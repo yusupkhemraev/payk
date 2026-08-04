@@ -23,7 +23,7 @@ const (
 
 	statusBarHeight = 1
 	// topBarHeight covers the workspace line plus its rule.
-	topBarHeight = 2
+	topBarHeight = 2 // the bar plus the blank row under it
 	// separatorSize is the rule drawn between neighbouring panes.
 	separatorSize = 1
 )
