@@ -29,8 +29,8 @@ binary, no runtime dependencies.
   generated from schemas, server URLs become environments, and declared
   auth (bearer/basic/apiKey) is pre-filled.
 - **Response viewer** — highlighted pretty-printed JSON with line numbers
-  and a raw-bytes toggle, aligned headers table, DNS/TCP/TLS/TTFB timings
-  as proportional bars, incremental search with `n/N`, soft wrap, one-key
+  and a raw-bytes toggle, aligned headers table, a timeline waterfall of the
+  network trace, incremental search with `n/N`, soft wrap, one-key
   copy to clipboard, and a per-session history of past responses. The tree
   remembers each request's last status code.
 - **Request editor** — tabbed (URL/Params/Headers/Body/Auth) with
@@ -114,7 +114,8 @@ auth:
 | `e` | edit body in `$EDITOR` |
 | `space` | send request (`esc` cancels) |
 | `[` / `]` | previous / next tab (editor and response) |
-| `/`, `n` / `N` | search in pane, next/previous match |
+| `/`, `n` / `N` | fuzzy search in pane, next/previous match |
+| `g` | jump labels in the tree (`gg` still goes to top) |
 | `w` | wrap long lines |
 | `y` | copy response body |
 | `m` | message log (full text of truncated status messages) |

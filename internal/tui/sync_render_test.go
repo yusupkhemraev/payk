@@ -96,7 +96,7 @@ func TestResponseRenderSync(t *testing.T) {
 	m = stepMsg(m, tea.KeyPressMsg{Code: ']', Text: "]"})
 
 	timings := ansi.Strip(m.(Model).View().Content)
-	for _, want := range []string{"TTFB", "Total", "TCP connect", "Status       200 OK"} {
+	for _, want := range []string{"TTFB", "Total", "TCP connect", "first byte"} {
 		if !strings.Contains(timings, want) {
 			t.Errorf("timings view missing %q:\n%s", want, timings)
 		}

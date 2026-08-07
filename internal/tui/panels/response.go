@@ -26,11 +26,11 @@ type respTab int
 const (
 	respBody respTab = iota
 	respHeaders
-	respTimings
+	respTimeline
 	respHistory
 )
 
-var respTabNames = []string{"Body", "Headers", "Timings", "History"}
+var respTabNames = []string{"Body", "Headers", "Timeline", "History"}
 
 const maxHistory = 50
 
@@ -192,7 +192,7 @@ func (m *Response) syncViewport() {
 	switch m.tab {
 	case respHeaders:
 		m.vp.SetContentLines(m.wrapLines(m.headersLines, nil))
-	case respTimings:
+	case respTimeline:
 		m.vp.SetContentLines(m.timingsLines)
 	case respHistory:
 		m.vp.SetContentLines(m.historyLines())
@@ -374,6 +374,14 @@ func (m Response) handleKey(msg tea.KeyPressMsg) (Response, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(msg, m.keys.Escape):
+		// A committed query keeps highlighting matches until esc drops it.
+		if m.query != "" {
+			m.query = ""
+			m.matches = nil
+			m.syncViewport()
+		}
+
 	case key.Matches(msg, m.keys.Search):
 		if m.resp != nil && m.tab == respBody {
 			m.searching = true
@@ -652,39 +660,39 @@ func (m Response) buildHeaderLines(resp *httpc.Response) []string {
 	return lines
 }
 
+// buildTimingLines draws a waterfall: every phase starts where it actually
+// happened, so a slow leg is visible as an offset, not just a longer bar.
 func (m Response) buildTimingLines(resp *httpc.Response) []string {
 	t := resp.Timings
-	rows := []struct {
-		label string
-		value time.Duration
-	}{
-		{"DNS", t.DNS},
-		{"TCP connect", t.Connect},
-		{"TLS", t.TLS},
-		{"TTFB", t.TTFB},
-		{"Total", t.Total},
-	}
-	// Bars are proportional to the total, so a slow phase is obvious at a
-	// glance instead of having to compare numbers.
 	total := max(float64(t.Total), 1)
-	barWidth := clampInt(m.width-34, 8, 28)
+	barWidth := clampInt(m.width-36, 10, 40)
 
 	var lines []string
-	for i, row := range rows {
-		value := "—"
-		bar := m.theme.Gutter.Render(strings.Repeat("▬", barWidth))
-		if row.value > 0 {
-			value = formatDuration(row.value)
-			filled := clampInt(int(float64(row.value)/total*float64(barWidth)), 1, barWidth)
-			bar = m.theme.TimingPhase(i).Render(strings.Repeat("▬", filled)) +
-				m.theme.Gutter.Render(strings.Repeat("▬", barWidth-filled))
+	for i, e := range t.Events {
+		start := e.At - e.Took
+		offset := clampInt(int(float64(start)/total*float64(barWidth)), 0, barWidth-1)
+		length := clampInt(int(float64(e.Took)/total*float64(barWidth)), 1, barWidth-offset)
+
+		bar := strings.Repeat(" ", offset) +
+			m.theme.TimingPhase(i).Render(strings.Repeat("▬", length)) +
+			strings.Repeat(" ", barWidth-offset-length)
+
+		value := formatDuration(e.Took)
+		if e.Took == 0 {
+			value = m.theme.Muted.Render("at " + formatDuration(e.At))
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s  %s",
-			m.theme.FieldLabel.Render(fmt.Sprintf("%-11s", row.label)), bar, value))
+			m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", e.Name)), bar, value))
 	}
+	if len(lines) == 0 {
+		lines = append(lines, " "+m.theme.Muted.Render("no trace events recorded"))
+	}
+
 	lines = append(lines, "",
+		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "TTFB"))+" "+formatDuration(t.TTFB),
+		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Total"))+" "+formatDuration(t.Total),
 		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Size"))+" "+formatSize(resp.Size()),
-		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Status"))+" "+resp.Status)
+		" "+m.theme.FieldLabel.Render(fmt.Sprintf("%-12s", "Protocol"))+" "+resp.Proto)
 	return lines
 }
 

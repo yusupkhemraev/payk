@@ -3,6 +3,7 @@ package panels
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -101,6 +102,10 @@ type Collections struct {
 
 	// pendingDelete awaits y/n confirmation.
 	pendingDelete *node
+
+	// jumping shows a label next to every visible row; typing one moves the
+	// cursor there.
+	jumping bool
 
 	// statuses maps a request key to its last response label; showStatus
 	// mirrors the config toggle.
@@ -265,6 +270,7 @@ func (m *Collections) SetFocused(focused bool) {
 			m.adding = false
 			m.addInput.Blur()
 		}
+		m.jumping = false
 	}
 }
 
@@ -276,6 +282,35 @@ func (m Collections) rowCount() int {
 		rows--
 	}
 	return max(rows, 1)
+}
+
+// jumpLabels are the keys shown next to rows in jump mode; g is missing on
+// purpose so the gg chord still works.
+const jumpLabels = "asdfhjklqwertyuiopzxcvbnm"
+
+// rowForLabel maps a pressed key back to the row it labelled.
+func (m *Collections) rowForLabel(key string) (int, bool) {
+	if len(key) != 1 {
+		return 0, false
+	}
+	idx := strings.IndexByte(jumpLabels, key[0])
+	if idx < 0 {
+		return 0, false
+	}
+	row := m.scroll + idx
+	if row >= len(m.visible) || idx >= m.rowCount() {
+		return 0, false
+	}
+	return row, true
+}
+
+// labelFor is the jump key shown for a visible row, empty when it has none.
+func (m Collections) labelFor(row int) string {
+	idx := row - m.scroll
+	if !m.jumping || idx < 0 || idx >= len(jumpLabels) {
+		return ""
+	}
+	return string(jumpLabels[idx])
 }
 
 func (m *Collections) ensureCursorVisible() {
@@ -321,11 +356,18 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 		return m, nil
 	}
 
-	// gg chord: first g arms the chord, second g jumps to top.
+	// g arms both the gg chord and jump labels: a second g goes to the top,
+	// any label key jumps to that row. jumpLabels never contains g.
 	if m.pendingG {
 		m.pendingG = false
+		m.jumping = false
 		if keyMsg.String() == "g" {
 			m.cursor = 0
+			m.ensureCursorVisible()
+			return m, nil
+		}
+		if row, ok := m.rowForLabel(keyMsg.String()); ok {
+			m.cursor = row
 			m.ensureCursorVisible()
 		}
 		return m, nil
@@ -356,6 +398,7 @@ func (m Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 
 	case key.Matches(keyMsg, m.keys.Top):
 		m.pendingG = true
+		m.jumping = true
 
 	case key.Matches(keyMsg, m.keys.Rename):
 		if m.cursor < len(m.visible) {
@@ -519,18 +562,25 @@ func (m Collections) updateSearch(msg tea.KeyPressMsg) (Collections, tea.Cmd) {
 	return m, cmd
 }
 
+// applyFilter ranks every node against the query and keeps the matches,
+// best first, so typing initials lands on the request you meant.
 func (m *Collections) applyFilter() {
-	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
+	query := strings.TrimSpace(m.searchInput.Value())
 	if query == "" {
 		m.refreshVisible()
 		return
 	}
 
-	m.visible = m.visible[:0]
+	type scored struct {
+		n     *node
+		score int
+	}
+	var hits []scored
+
 	var walk func(n *node)
 	walk = func(n *node) {
-		if n.matches(query) {
-			m.visible = append(m.visible, n)
+		if score, ok := n.match(query); ok {
+			hits = append(hits, scored{n, score})
 		}
 		for _, child := range n.children {
 			walk(child)
@@ -539,22 +589,37 @@ func (m *Collections) applyFilter() {
 	for _, root := range m.roots {
 		walk(root)
 	}
+	sort.SliceStable(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+
+	m.visible = m.visible[:0]
+	for _, hit := range hits {
+		m.visible = append(m.visible, hit.n)
+	}
 	m.cursor = 0
 	m.scroll = 0
 }
 
-// matches checks the query against name, method, URL, and tree path.
-func (n *node) matches(query string) bool {
-	if strings.Contains(strings.ToLower(n.name), query) {
-		return true
+// match scores the query against the name first, then the method, URL, and
+// tree path, so a hit on the name outranks one on the path.
+func (n *node) match(query string) (int, bool) {
+	type field struct {
+		text  string
+		bonus int
 	}
+	fields := []field{{n.name, 40}, {n.pathLabel(), 0}}
 	if n.request != nil {
-		if strings.Contains(strings.ToLower(n.request.Method), query) ||
-			strings.Contains(strings.ToLower(n.request.URL), query) {
-			return true
+		fields = append(fields,
+			field{n.request.Method + " " + n.name, 20},
+			field{n.request.URL, 0})
+	}
+
+	best, found := 0, false
+	for _, f := range fields {
+		if score, ok := fuzzyScore(f.text, query); ok && (!found || score+f.bonus > best) {
+			best, found = score+f.bonus, true
 		}
 	}
-	return strings.Contains(strings.ToLower(n.pathLabel()), query)
+	return best, found
 }
 
 func (n *node) pathLabel() string {
@@ -656,7 +721,7 @@ func (m Collections) body() string {
 		if i > m.scroll {
 			b.WriteString("\n")
 		}
-		b.WriteString(m.renderRow(m.visible[i], i == m.cursor && m.focused))
+		b.WriteString(m.renderRow(m.visible[i], i, i == m.cursor && m.focused))
 	}
 	if m.searching && len(m.visible) == 0 {
 		b.WriteString(m.theme.Muted.Render(" no matches"))
@@ -664,7 +729,7 @@ func (m Collections) body() string {
 	return b.String()
 }
 
-func (m Collections) renderRow(n *node, selected bool) string {
+func (m Collections) renderRow(n *node, row int, selected bool) string {
 	indent := strings.Repeat("  ", n.depth)
 	// Search results render flat, with the tree path as context instead of
 	// indentation.
@@ -674,8 +739,16 @@ func (m Collections) renderRow(n *node, selected bool) string {
 		context = "  " + n.pathLabel()
 	}
 
-	inner := m.width - 4
+	// The frame adds a border, a space, and clips to width-4; the lead cell
+	// below takes one more, so a row body gets width-5.
+	inner := m.width - 5
 	status := m.statusFor(n)
+
+	// In jump mode the label replaces the row's leading space.
+	lead := " "
+	if label := m.labelFor(row); label != "" {
+		lead = m.theme.TabDot.Render(label)
+	}
 
 	// The selected row gets a single background style stretched across the
 	// panel; nested foreground styles would reset it mid-row, so it is
@@ -683,9 +756,9 @@ func (m Collections) renderRow(n *node, selected bool) string {
 	if selected {
 		label := " " + indent + n.plainLabel(m.theme.Icons) + context
 		if status != "" {
-			return m.theme.Selected.Render(SplitRow(label, status+" ", inner))
+			return lead + m.theme.Selected.Render(SplitRow(label, status+" ", inner))
 		}
-		return m.theme.Selected.Render(Pad(label, inner))
+		return lead + m.theme.Selected.Render(Pad(label, inner))
 	}
 
 	styledContext := ""
@@ -700,18 +773,18 @@ func (m Collections) renderRow(n *node, selected bool) string {
 	switch n.kind {
 	case nodeRequest:
 		badge := m.theme.Method(n.request.Method).Render(fmt.Sprintf("%-6s", n.request.Method))
-		row := " " + indent + badge + " " + n.name + styledContext
+		line := " " + indent + badge + " " + n.name + styledContext
 		if styledStatus != "" {
-			return SplitRow(row, styledStatus, inner)
+			line = SplitRow(line, styledStatus, inner)
 		}
-		return row
+		return lead + line
 	case nodeCollection:
 		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
-		return " " + m.theme.Muted.Render(n.folderIcon(m.theme.Icons)) + " " +
+		return lead + " " + m.theme.Muted.Render(n.folderIcon(m.theme.Icons)) + " " +
 			m.theme.TreeCollection.Render(n.name) + count + styledContext
 	default:
 		count := m.theme.TreeCount.Render(fmt.Sprintf(" · %d", n.requestCount()))
-		return " " + m.theme.Muted.Render(indent+n.folderIcon(m.theme.Icons)) + " " +
+		return lead + " " + m.theme.Muted.Render(indent+n.folderIcon(m.theme.Icons)) + " " +
 			m.theme.TreeFolder.Render(n.name) + count + styledContext
 	}
 }

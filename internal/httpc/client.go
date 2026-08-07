@@ -31,6 +31,19 @@ type Timings struct {
 	// response byte.
 	TTFB  time.Duration
 	Total time.Duration
+
+	// Events are the trace points in order, each offset from the start of
+	// the round trip, so a caller can draw a waterfall rather than a set of
+	// bars that all begin at zero.
+	Events []Event
+}
+
+// Event is one httptrace point: when it happened relative to the request
+// start, and how long the phase it closes took (zero for instants).
+type Event struct {
+	Name string
+	At   time.Duration
+	Took time.Duration
 }
 
 type Response struct {
@@ -52,13 +65,24 @@ func (r *Response) Size() int {
 // goroutines (happy eyeballs), so all access is mutex-guarded.
 type tracer struct {
 	mu           sync.Mutex
+	start        time.Time
 	dnsStart     time.Time
 	connectStart time.Time
 	tlsStart     time.Time
 	timings      Timings
 }
 
+// record appends a trace point; callers already hold the lock.
+func (t *tracer) record(name string, took time.Duration) {
+	t.timings.Events = append(t.timings.Events, Event{
+		Name: name,
+		At:   time.Since(t.start),
+		Took: took,
+	})
+}
+
 func (t *tracer) clientTrace(start time.Time) *httptrace.ClientTrace {
+	t.start = start
 	return &httptrace.ClientTrace{
 		DNSStart: func(httptrace.DNSStartInfo) {
 			t.mu.Lock()
@@ -69,6 +93,7 @@ func (t *tracer) clientTrace(start time.Time) *httptrace.ClientTrace {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			t.timings.DNS = time.Since(t.dnsStart)
+			t.record("DNS", t.timings.DNS)
 		},
 		ConnectStart: func(_, _ string) {
 			t.mu.Lock()
@@ -82,6 +107,7 @@ func (t *tracer) clientTrace(start time.Time) *httptrace.ClientTrace {
 			defer t.mu.Unlock()
 			if err == nil && !t.connectStart.IsZero() {
 				t.timings.Connect = time.Since(t.connectStart)
+				t.record("TCP connect", t.timings.Connect)
 			}
 		},
 		TLSHandshakeStart: func() {
@@ -94,12 +120,21 @@ func (t *tracer) clientTrace(start time.Time) *httptrace.ClientTrace {
 			defer t.mu.Unlock()
 			if err == nil && !t.tlsStart.IsZero() {
 				t.timings.TLS = time.Since(t.tlsStart)
+				t.record("TLS", t.timings.TLS)
+			}
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			if info.Err == nil {
+				t.record("request sent", 0)
 			}
 		},
 		GotFirstResponseByte: func() {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			t.timings.TTFB = time.Since(start)
+			t.record("first byte", 0)
 		},
 	}
 }
@@ -140,6 +175,7 @@ func Send(ctx context.Context, req *core.Request) (*Response, error) {
 	timings := tr.timings
 	tr.mu.Unlock()
 	timings.Total = time.Since(start)
+	timings.Events = append(timings.Events, Event{Name: "body read", At: timings.Total})
 
 	return &Response{
 		Status:     resp.Status,

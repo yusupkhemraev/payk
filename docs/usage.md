@@ -73,9 +73,13 @@ environment, and transient messages. Long messages are truncated — press
   name, press `enter` — an empty GET opens in the editor, ready for a URL.
   In an empty workspace the request lands in a new `api` collection.
 - Folders start collapsed; every node shows its request count.
-- `/` filters the tree live — by name, method, URL, and path. Matches show
-  flat with their location; `enter` jumps to the match in the full tree,
-  `esc` cancels.
+- `/` filters the tree live and fuzzily: `cu` finds "create user", `отп`
+  finds "Отправка OTP". Matches rank by quality — consecutive letters and
+  word starts win — and show flat with their location. `enter` jumps to the
+  selected match in the full tree, `esc` cancels.
+- `g` labels every visible row with a letter; pressing that letter moves
+  the cursor there in one keystroke. `gg` still goes to the top, since no
+  label ever uses `g`.
 - `r` renames the selected request, folder, or collection (files and
   directories move on disk accordingly).
 - `d` deletes the selected node after a `y/n` confirmation.
@@ -157,8 +161,10 @@ in-flight state; `esc` cancels. The response viewer has four tabs:
   (OSC52 — works over ssh). The status line shows the HTTP status,
   protocol, size, total time, and your scroll position.
 - **Headers** — aligned name/value table, scrollable, wrappable.
-- **Timings** — DNS, TCP connect, TLS, TTFB, and total, plus size and
-  status. Phases that did not happen show as `—`.
+- **Timeline** — a waterfall of the trace events (DNS, TCP connect, TLS,
+  request sent, first byte, body read). Each bar starts where the phase
+  actually began, so a slow leg shows up as an offset rather than just a
+  longer bar, with TTFB, total, size, and protocol underneath.
 - **History** — every send of the session (last 50), newest first, with
   time, status, and duration. `j`/`k` select, `enter` loads that past
   response back into the viewer. Errors are recorded too.

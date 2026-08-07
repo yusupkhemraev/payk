@@ -106,7 +106,7 @@ func Default() KeyMap {
 		),
 		Top: key.NewBinding(
 			key.WithKeys("g"),
-			key.WithHelp("gg", "go to top"),
+			key.WithHelp("g", "jump labels · gg top"),
 		),
 		Bottom: key.NewBinding(
 			key.WithKeys("G"),
@@ -126,7 +126,7 @@ func Default() KeyMap {
 		),
 		Search: key.NewBinding(
 			key.WithKeys("/"),
-			key.WithHelp("/", "search in pane"),
+			key.WithHelp("/", "fuzzy search in pane"),
 		),
 		SearchNext: key.NewBinding(
 			key.WithKeys("n"),

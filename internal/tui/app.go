@@ -778,10 +778,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.startSend()
 
 	case key.Matches(msg, m.keys.Escape):
+		// Cancelling an in-flight send wins; otherwise the focused pane gets
+		// esc so it can clear its own state, like a committed search.
 		if m.sending && m.cancelSend != nil {
 			m.cancelSend()
+			return m, nil
 		}
-		return m, nil
+		return m.routeToFocused(msg)
 
 	case key.Matches(msg, m.keys.Help):
 		m.showHelp = true
