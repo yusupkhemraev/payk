@@ -14,9 +14,10 @@ binary, no runtime dependencies.
   search in any pane, `:` command line with completion, `?` adaptive help.
   A mode badge tracks NORMAL/INSERT/SEARCH/COMMAND, panes resize with
   `<`/`>`, and `z` zooms one to fullscreen.
-- **Configurable** — theme (four Catppuccin flavors), icon set (Nerd Font,
-  unicode, or none), layout, line numbers, and sidebar width live in
-  `config.yaml`, changeable on the fly with `:theme`, `:layout`, `:icons`.
+- **Configurable** — theme (Catppuccin flavors plus a transparent espresso),
+  icon set (Nerd Font, unicode, or none), layout, frame style, line numbers,
+  and sidebar width live in `config.yaml`, changeable on the fly with
+  `:theme`, `:layout`, `:icons`, `:chrome`.
 - **Plain YAML storage** — one file per request, folders are directories,
   stable key order. Everything lives in `.payk/` next to your code and
   diffs cleanly in git.

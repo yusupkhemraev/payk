@@ -28,6 +28,7 @@ var commandSpecs = []commandSpec{
 	{name: "theme", desc: "latte · frappe · macchiato · mocha · espresso", args: true},
 	{name: "layout", desc: "stacked · columns", args: true},
 	{name: "icons", desc: "nerd · unicode · none", args: true},
+	{name: "chrome", desc: "boxed · classic · plain", args: true},
 	{name: "messages", desc: "message log"},
 	{name: "q", desc: "quit"},
 }
@@ -71,6 +72,9 @@ func (m *Model) commandSuggestions() []cmdSuggestion {
 	case "icons":
 		return enumSuggestions(head, rest, m.prefs.Icons,
 			config.IconsNerd, config.IconsUnicode, config.IconsNone)
+	case "chrome":
+		return enumSuggestions(head, rest, m.prefs.Chrome,
+			config.ChromeBoxed, config.ChromeClassic, config.ChromePlain)
 	}
 	return nil
 }

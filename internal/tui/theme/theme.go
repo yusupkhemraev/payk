@@ -19,6 +19,8 @@ type Theme struct {
 	Icons  Icons
 	// Transparent means the app must not paint its own background.
 	Transparent bool
+	// Chrome selects the pane frame style.
+	Chrome string
 
 	Base    color.Color
 	Mantle  color.Color
@@ -232,6 +234,7 @@ func FromConfig(cfg config.Config) *Theme {
 	}
 	t := ByName(name)
 	t.Icons = iconsFor(cfg.Icons)
+	t.Chrome = cfg.Chrome
 	if cfg.Transparent {
 		t.makeTransparent()
 	}
@@ -262,6 +265,7 @@ func ByName(name string) *Theme {
 	}
 	t := New(flavor)
 	t.Icons = iconsFor(config.IconsUnicode)
+	t.Chrome = config.ChromeBoxed
 	return t
 }
 

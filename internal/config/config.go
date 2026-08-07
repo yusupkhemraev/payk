@@ -18,6 +18,13 @@ const (
 
 	LayoutStacked = "stacked"
 	LayoutColumns = "columns"
+
+	// ChromeBoxed puts the pane title inside the top border, ChromeClassic
+	// gives it its own row under the border like earlier versions, and
+	// ChromePlain drops borders for a focus bar.
+	ChromeBoxed   = "boxed"
+	ChromeClassic = "classic"
+	ChromePlain   = "plain"
 )
 
 type Config struct {
@@ -28,6 +35,8 @@ type Config struct {
 	Icons string `yaml:"icons"`
 	// Layout is stacked (request above response) or columns (three panes).
 	Layout string `yaml:"layout"`
+	// Chrome styles the pane frames: boxed, classic, or plain.
+	Chrome string `yaml:"chrome"`
 
 	// Transparent leaves the background unpainted so a blurred or
 	// translucent terminal shows through.
@@ -47,6 +56,7 @@ func Default() Config {
 		Theme:            "mocha",
 		Icons:            IconsUnicode,
 		Layout:           LayoutStacked,
+		Chrome:           ChromeBoxed,
 		LineNumbers:      true,
 		SidebarWidth:     34,
 		ShowStatusInTree: true,
@@ -130,6 +140,11 @@ func (c *Config) Normalize() {
 	case LayoutStacked, LayoutColumns:
 	default:
 		c.Layout = def.Layout
+	}
+	switch c.Chrome {
+	case ChromeBoxed, ChromeClassic, ChromePlain:
+	default:
+		c.Chrome = def.Chrome
 	}
 	if c.SidebarWidth < 20 || c.SidebarWidth > 80 {
 		c.SidebarWidth = def.SidebarWidth

@@ -445,6 +445,14 @@ func (m Model) executeCommand(line string) (tea.Model, tea.Cmd) {
 		return m.updatePrefs(func(p *config.Config) { p.Icons = fields[1] },
 			"icons: "+fields[1])
 
+	case "chrome":
+		if len(fields) < 2 {
+			m.setStatus("usage: :chrome boxed|classic|plain", true)
+			return m, nil
+		}
+		return m.updatePrefs(func(p *config.Config) { p.Chrome = fields[1] },
+			"chrome: "+fields[1])
+
 	case "import":
 		if len(fields) < 2 {
 			m.setStatus("usage: :import <file-or-url>", true)

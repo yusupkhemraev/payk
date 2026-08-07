@@ -35,6 +35,7 @@ minimal; renames show up as file moves.
 theme: mocha           # latte | frappe | macchiato | mocha
 icons: unicode         # nerd (needs a Nerd Font) | unicode | none
 layout: stacked        # stacked (request above response) | columns
+chrome: boxed          # boxed (title in the border) | classic | plain
 line_numbers: true     # gutter in the response body
 sidebar_width: 34
 show_status_in_tree: true   # last response code next to each request
@@ -42,8 +43,9 @@ wrap: false
 editor: ""             # overrides $EDITOR for the body escape hatch
 ```
 
-`:theme`, `:layout`, and `:icons` change these live and write the file
-for you. Unknown values fall back to the default rather than breaking
+`:theme`, `:layout`, `:icons`, and `:chrome` change these live and write
+the file for you. `chrome: classic` with `layout: columns` brings back the
+pre-0.4 look: three bordered columns with the title on its own row. Unknown values fall back to the default rather than breaking
 the UI.
 
 The tree shows the status of each request's last response (`200`,
@@ -257,4 +259,5 @@ highlighted candidate, `ctrl+n`/`ctrl+p` (or arrows) cycle.
 | `:theme <flavor>` | latte · frappe · macchiato · mocha |
 | `:layout <mode>` | stacked · columns |
 | `:icons <set>` | nerd · unicode · none |
+| `:chrome <style>` | boxed · classic · plain |
 | `:messages` | open the message log |

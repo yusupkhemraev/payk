@@ -880,8 +880,9 @@ func (m Request) renderBodyTab(b *strings.Builder) {
 	}
 }
 
-// bodyPreview syntax-highlights JSON bodies in normal mode, capped by size
-// so huge bodies never block rendering.
+// bodyPreview pretty-prints and highlights JSON bodies for display, capped
+// by size so huge bodies never block rendering. The stored content is left
+// alone — f rewrites the file, this only makes a one-line body readable.
 func (m Request) bodyPreview() string {
 	content := m.req.Body.Content
 	looksJSON := m.req.Body.Type == "json" ||
@@ -889,6 +890,10 @@ func (m Request) bodyPreview() string {
 		strings.HasPrefix(strings.TrimSpace(content), "[")
 	if !looksJSON || len(content) > highlightLimit {
 		return content
+	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, []byte(strings.TrimSpace(content)), "", "  "); err == nil {
+		content = pretty.String()
 	}
 	var highlighted bytes.Buffer
 	if err := quick.Highlight(&highlighted, content, "json", "terminal16m", m.theme.ChromaStyle()); err != nil {

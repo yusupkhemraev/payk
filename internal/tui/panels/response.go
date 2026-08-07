@@ -97,10 +97,21 @@ func NewResponse(t *theme.Theme, keys keymap.KeyMap) Response {
 	return Response{theme: t, keys: keys, spin: sp, vp: viewport.New(), searchInput: search}
 }
 
-// SetTheme swaps the theme and gutter preference after a config reload.
+// SetTheme swaps the theme and gutter preference after a config reload. The
+// body was highlighted with the old palette, so it has to be re-rendered or
+// a theme change would leave the response in the previous colors.
 func (m *Response) SetTheme(t *theme.Theme, lineNumbers bool) {
 	m.theme = t
 	m.lineNumbers = lineNumbers
+	if m.resp == nil {
+		return
+	}
+	plain := m.plainBody(m.resp)
+	m.plainLines = strings.Split(plain, "\n")
+	m.renderedLines = strings.Split(m.highlightBody(m.resp, plain), "\n")
+	m.headersLines = m.buildHeaderLines(m.resp)
+	m.timingsLines = m.buildTimingLines(m.resp)
+	m.syncViewport()
 }
 
 // Searching reports whether the search input captures keystrokes; the root
