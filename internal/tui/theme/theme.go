@@ -6,6 +6,7 @@ package theme
 
 import (
 	"image/color"
+	"math"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -21,6 +22,8 @@ type Theme struct {
 	Transparent bool
 	// Chrome selects the pane frame style.
 	Chrome string
+
+	light bool
 
 	Base    color.Color
 	Mantle  color.Color
@@ -95,22 +98,41 @@ func New(flavor catppuccin.Flavor) *Theme {
 		Base:    flavor.Base(),
 		Mantle:  flavor.Mantle(),
 		Surface: flavor.Surface0(),
-		Overlay: flavor.Overlay0(),
 		Text:    flavor.Text(),
 		Subtext: flavor.Subtext0(),
 		Accent:  flavor.Mauve(),
+		light:   lightBackground(flavor.Base()),
 	}
+
+	// Catppuccin's neutral ramp is built for dark bases: on Latte the same
+	// step lands far closer to the background, dropping muted text to 2.8:1
+	// where Mocha holds 4.4:1. Light flavors take the next darker step so the
+	// same role reads at a comparable strength.
+	pick := func(dark, light catppuccin.Color) color.Color {
+		if t.light {
+			return light
+		}
+		return dark
+	}
+	muted := pick(flavor.Overlay1(), flavor.Subtext0())
+	faint := pick(flavor.Overlay0(), flavor.Overlay2())
+	onSurface := pick(flavor.Subtext0(), flavor.Text())
+	barText := pick(flavor.Subtext1(), flavor.Text())
+	rule := pick(flavor.Surface1(), flavor.Surface2())
+	chipBg := pick(flavor.Surface1(), flavor.Surface0())
+	chipFg := pick(flavor.Lavender(), flavor.Blue())
+	t.Overlay = faint
 
 	border := lipgloss.RoundedBorder()
 
 	t.panelBorder = lipgloss.NewStyle().
 		Border(border).
-		BorderForeground(flavor.Surface1())
+		BorderForeground(rule)
 	t.panelBorderFocused = t.panelBorder.
 		BorderForeground(flavor.Mauve())
 
 	t.panelTitle = lipgloss.NewStyle().
-		Foreground(flavor.Subtext0()).
+		Foreground(onSurface).
 		Padding(0, 1)
 	t.panelTitleFocused = t.panelTitle.
 		Foreground(flavor.Mauve()).
@@ -130,7 +152,7 @@ func New(flavor catppuccin.Flavor) *Theme {
 		Padding(0, 1)
 	t.StatusHint = lipgloss.NewStyle().
 		Background(flavor.Mantle()).
-		Foreground(flavor.Overlay1()).
+		Foreground(muted).
 		Padding(0, 1)
 
 	t.HelpBox = lipgloss.NewStyle().
@@ -147,7 +169,7 @@ func New(flavor catppuccin.Flavor) *Theme {
 	t.HelpDesc = lipgloss.NewStyle().
 		Foreground(flavor.Subtext1())
 
-	t.Muted = lipgloss.NewStyle().Foreground(flavor.Overlay1())
+	t.Muted = lipgloss.NewStyle().Foreground(muted)
 	t.Selected = lipgloss.NewStyle().
 		Background(flavor.Surface1()).
 		Foreground(flavor.Text()).
@@ -157,36 +179,36 @@ func New(flavor catppuccin.Flavor) *Theme {
 		Foreground(flavor.Mauve()).
 		Bold(true).
 		Underline(true)
-	t.TabInactive = lipgloss.NewStyle().Foreground(flavor.Overlay1())
-	t.FieldLabel = lipgloss.NewStyle().Foreground(flavor.Subtext0())
+	t.TabInactive = lipgloss.NewStyle().Foreground(muted)
+	t.FieldLabel = lipgloss.NewStyle().Foreground(onSurface)
 
 	t.TreeCollection = lipgloss.NewStyle().
 		Foreground(flavor.Sapphire()).
 		Bold(true)
 	t.TreeFolder = lipgloss.NewStyle().Foreground(flavor.Text())
-	t.TreeCount = lipgloss.NewStyle().Foreground(flavor.Overlay0())
-	t.Separator = lipgloss.NewStyle().Foreground(flavor.Surface1())
+	t.TreeCount = lipgloss.NewStyle().Foreground(faint)
+	t.Separator = lipgloss.NewStyle().Foreground(rule)
 
 	t.FocusBar = lipgloss.NewStyle().Foreground(flavor.Mauve())
-	t.Border = lipgloss.NewStyle().Foreground(flavor.Surface1())
+	t.Border = lipgloss.NewStyle().Foreground(rule)
 	t.BorderOn = lipgloss.NewStyle().Foreground(flavor.Mauve())
 	t.PillMuted = lipgloss.NewStyle().
 		Background(flavor.Surface1()).
-		Foreground(flavor.Subtext0())
-	t.Bar = lipgloss.NewStyle().Background(flavor.Surface0()).Foreground(flavor.Subtext1())
+		Foreground(onSurface)
+	t.Bar = lipgloss.NewStyle().Background(flavor.Surface0()).Foreground(barText)
 	t.VarChip = lipgloss.NewStyle().Foreground(flavor.Mauve())
 	t.PathChip = lipgloss.NewStyle().Foreground(flavor.Blue())
 	t.TabDot = lipgloss.NewStyle().Foreground(flavor.Peach())
-	t.PaneTitle = lipgloss.NewStyle().Foreground(flavor.Subtext0()).Bold(true)
+	t.PaneTitle = lipgloss.NewStyle().Foreground(onSurface).Bold(true)
 	t.PaneActive = lipgloss.NewStyle().Foreground(flavor.Mauve()).Bold(true)
 	t.TopBar = lipgloss.NewStyle().Background(flavor.Mantle())
-	t.Gutter = lipgloss.NewStyle().Foreground(flavor.Surface1())
+	t.Gutter = lipgloss.NewStyle().Foreground(rule)
 	t.Chip = lipgloss.NewStyle().
-		Background(flavor.Surface1()).
-		Foreground(flavor.Lavender())
+		Background(chipBg).
+		Foreground(chipFg)
 	t.Badge = lipgloss.NewStyle().
 		Background(flavor.Surface0()).
-		Foreground(flavor.Subtext0()).
+		Foreground(onSurface).
 		Bold(true)
 	t.Dirty = lipgloss.NewStyle().Foreground(flavor.Yellow())
 
@@ -220,6 +242,25 @@ func New(flavor catppuccin.Flavor) *Theme {
 	}
 
 	return t
+}
+
+// lightBackground reports whether a flavor paints onto a light base. It reads
+// the color rather than the flavor name so a flavor added upstream is handled
+// without a code change here.
+func lightBackground(c color.Color) bool {
+	return relativeLuminance(c) > 0.5
+}
+
+func relativeLuminance(c color.Color) float64 {
+	r, g, b, _ := c.RGBA()
+	linear := func(v uint32) float64 {
+		s := float64(v) / 0xffff
+		if s <= 0.03928 {
+			return s / 12.92
+		}
+		return math.Pow((s+0.055)/1.055, 2.4)
+	}
+	return 0.2126*linear(r) + 0.7152*linear(g) + 0.0722*linear(b)
 }
 
 func Default() *Theme {
